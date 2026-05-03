@@ -5,12 +5,20 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class UserCreate(BaseModel):
     name: str = Field(min_length=2, max_length=100)
-    email: str = Field(min_length=5, max_length=255)
+    email: str = Field(
+        min_length=5,
+        max_length=255,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
     password: str = Field(min_length=8, max_length=128)
 
 
 class UserLogin(BaseModel):
-    email: str = Field(min_length=5, max_length=255)
+    email: str = Field(
+        min_length=5,
+        max_length=255,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
     password: str = Field(min_length=8, max_length=128)
 
 
