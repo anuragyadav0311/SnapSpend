@@ -12,15 +12,15 @@ const AuthContext = createContext(null)
 function AuthProvider({ children }) {
   const [token, setToken] = useState(null)
   const [user, setUser] = useState(null)
+  const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
     const storedToken = getStoredToken()
-    if (!storedToken) {
-      return
+    if (storedToken) {
+      setToken(storedToken)
+      setUser(getUserFromToken(storedToken))
     }
-
-    setToken(storedToken)
-    setUser(getUserFromToken(storedToken))
+    setIsReady(true)
   }, [])
 
   function login(nextToken) {
@@ -37,6 +37,7 @@ function AuthProvider({ children }) {
 
   const value = {
     isAuthenticated: Boolean(token),
+    isReady,
     token,
     user,
     login,

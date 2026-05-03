@@ -4,7 +4,11 @@ import useAuth from '../hooks/useAuth.js'
 
 function ProtectedRoute() {
   const location = useLocation()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isReady } = useAuth()
+
+  if (!isReady) {
+    return null
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />
