@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
+import ThemeToggle from '../components/ThemeToggle.jsx'
 import useAuth from '../hooks/useAuth.js'
 import { loginUser } from '../services/authService.js'
 
@@ -38,21 +39,26 @@ function LoginPage() {
   }
 
   return (
-    <section className="flex min-h-screen items-center justify-center px-6 py-16">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur">
-        <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">
-          Expense Tracker
-        </p>
-        <h1 className="mt-4 text-3xl font-semibold text-white">Login</h1>
-        <p className="mt-3 text-sm text-slate-300">
+    <section className="flex min-h-screen items-center justify-center bg-[var(--app-background)] px-6 py-16 text-[var(--text-primary)]">
+      <div className="w-full max-w-md rounded-3xl border border-[var(--border-color)] bg-[var(--surface-panel)] p-8 shadow-[0_24px_80px_var(--shadow-color)] backdrop-blur">
+        <div className="flex items-start justify-between gap-4">
+          <p className="text-sm uppercase tracking-[0.3em] text-[var(--accent-color)]">
+            Expense Tracker
+          </p>
+          <ThemeToggle />
+        </div>
+        <h1 className="mt-4 text-3xl font-semibold">Login</h1>
+        <p className="mt-3 text-sm text-[var(--text-secondary)]">
           Access your expenses, monthly trends, and budget controls.
         </p>
         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
           <label className="block">
-            <span className="mb-2 block text-sm text-slate-300">Email</span>
+            <span className="mb-2 block text-sm text-[var(--text-secondary)]">
+              Email
+            </span>
             <input
               required
-              className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none transition focus:border-cyan-300"
+              className="w-full rounded-2xl border border-[var(--border-color)] bg-[var(--surface-card)] px-4 py-3 text-[var(--text-primary)] outline-none transition focus:border-[var(--accent-color)]"
               type="email"
               name="email"
               value={formData.email}
@@ -61,11 +67,13 @@ function LoginPage() {
             />
           </label>
           <label className="block">
-            <span className="mb-2 block text-sm text-slate-300">Password</span>
+            <span className="mb-2 block text-sm text-[var(--text-secondary)]">
+              Password
+            </span>
             <input
               required
               minLength={8}
-              className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white outline-none transition focus:border-cyan-300"
+              className="w-full rounded-2xl border border-[var(--border-color)] bg-[var(--surface-card)] px-4 py-3 text-[var(--text-primary)] outline-none transition focus:border-[var(--accent-color)]"
               type="password"
               name="password"
               value={formData.password}
@@ -74,21 +82,21 @@ function LoginPage() {
             />
           </label>
           {error ? (
-            <p className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            <p className="rounded-2xl border border-[color:color-mix(in_srgb,var(--danger-color)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--danger-color)_14%,transparent)] px-4 py-3 text-sm text-[var(--danger-color)]">
               {error}
             </p>
           ) : null}
           <button
-            className="w-full rounded-2xl bg-cyan-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-2xl bg-[var(--accent-color)] px-4 py-3 font-semibold text-[var(--accent-contrast)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
             type="submit"
             disabled={isSubmitting}
           >
             {isSubmitting ? 'Signing in...' : 'Login'}
           </button>
         </form>
-        <p className="mt-6 text-sm text-slate-300">
+        <p className="mt-6 text-sm text-[var(--text-secondary)]">
           Need an account?{' '}
-          <Link className="font-semibold text-cyan-300" to="/register">
+          <Link className="font-semibold text-[var(--accent-color)]" to="/register">
             Register
           </Link>
         </p>

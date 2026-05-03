@@ -4,7 +4,7 @@ function ErrorMessage({ message }) {
   }
 
   return (
-    <div className="rounded-3xl border border-rose-400/30 bg-rose-500/10 p-5 text-rose-100">
+    <div className="rounded-3xl border border-[color:color-mix(in_srgb,var(--danger-color)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--danger-color)_14%,transparent)] p-5 text-[var(--danger-color)]">
       {message}
     </div>
   )

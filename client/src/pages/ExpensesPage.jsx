@@ -39,16 +39,16 @@ function ExpensesPage() {
             onSubmit={handleSubmit}
           />
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+          <div className="rounded-3xl border border-[var(--border-color)] bg-[var(--surface-panel)] p-6 shadow-[0_18px_50px_var(--shadow-color)] backdrop-blur">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-semibold">Transaction list</h2>
-                <p className="mt-2 text-sm text-slate-400">
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
                   Manage all recorded expenses from one place.
                 </p>
               </div>
               {isLoading ? (
-                <span className="text-sm text-slate-400">Loading...</span>
+                <span className="text-sm text-[var(--text-muted)]">Loading...</span>
               ) : null}
             </div>
             <div className="mt-6 space-y-3">
@@ -62,7 +62,7 @@ function ExpensesPage() {
                   />
                 ))
               ) : (
-                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-slate-400">
+                <div className="rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-8 text-center text-[var(--text-muted)]">
                   No expenses yet. Add your first one from the form.
                 </div>
               )}

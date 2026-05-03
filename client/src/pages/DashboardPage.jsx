@@ -20,20 +20,20 @@ function DashboardPage() {
 
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-3">
-          <article className="rounded-3xl border border-white/10 bg-slate-950/60 p-6">
-            <p className="text-sm text-slate-400">Total spending</p>
+          <article className="rounded-3xl border border-[var(--border-color)] bg-[var(--surface-card)] p-6">
+            <p className="text-sm text-[var(--text-muted)]">Total spending</p>
             <h2 className="mt-3 text-3xl font-semibold">
               ${summary.total.toFixed(2)}
             </h2>
           </article>
-          <article className="rounded-3xl border border-white/10 bg-slate-950/60 p-6">
-            <p className="text-sm text-slate-400">Transactions</p>
+          <article className="rounded-3xl border border-[var(--border-color)] bg-[var(--surface-card)] p-6">
+            <p className="text-sm text-[var(--text-muted)]">Transactions</p>
             <h2 className="mt-3 text-3xl font-semibold">
               {summary.transactionCount}
             </h2>
           </article>
-          <article className="rounded-3xl border border-white/10 bg-slate-950/60 p-6">
-            <p className="text-sm text-slate-400">Current budget</p>
+          <article className="rounded-3xl border border-[var(--border-color)] bg-[var(--surface-card)] p-6">
+            <p className="text-sm text-[var(--text-muted)]">Current budget</p>
             <h2 className="mt-3 text-3xl font-semibold">
               {summary.activeBudget
                 ? `$${summary.activeBudget.monthly_limit.toFixed(2)}`
@@ -49,7 +49,7 @@ function DashboardPage() {
           >
             <div className="flex items-center justify-between">
               {isLoading ? (
-                <span className="text-sm text-slate-400">Loading...</span>
+                <span className="text-sm text-[var(--text-muted)]">Loading...</span>
               ) : null}
             </div>
             <div className="mt-6 space-y-3">
@@ -57,24 +57,24 @@ function DashboardPage() {
                 summary.recent.map((expense) => (
                   <div
                     key={expense.id}
-                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3"
+                    className="flex items-center justify-between rounded-2xl border border-[var(--border-color)] bg-[var(--surface-card)] px-4 py-3"
                   >
                     <div>
                       <p className="font-medium">{expense.category}</p>
-                      <p className="text-sm text-slate-400">
+                      <p className="text-sm text-[var(--text-muted)]">
                         {expense.description || 'No description'}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold">${expense.amount.toFixed(2)}</p>
-                      <p className="text-sm text-slate-400">
+                      <p className="text-sm text-[var(--text-muted)]">
                         {new Date(expense.date).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-slate-400">
+                <div className="rounded-2xl border border-dashed border-[var(--border-color)] px-4 py-8 text-center text-[var(--text-muted)]">
                   No expenses recorded yet.
                 </div>
               )}

@@ -1,6 +1,6 @@
 function Loader({ label = 'Loading...' }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-center text-sm text-slate-300 backdrop-blur">
+    <div className="rounded-3xl border border-[var(--border-color)] bg-[var(--surface-panel)] p-6 text-center text-sm text-[var(--text-secondary)] backdrop-blur">
       {label}
     </div>
   )
