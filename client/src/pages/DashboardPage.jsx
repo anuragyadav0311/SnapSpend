@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import AppShell from '../components/AppShell.jsx'
+import ChartCard from '../components/ChartCard.jsx'
+import ErrorMessage from '../components/ErrorMessage.jsx'
+import Loader from '../components/Loader.jsx'
 import { fetchBudgets } from '../services/budgetService.js'
 import { fetchExpenses } from '../services/expenseService.js'
 
@@ -60,25 +64,15 @@ function DashboardPage() {
   }, [budgets, expenses])
 
   return (
-    <section className="px-6 py-10 text-white">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-8 backdrop-blur">
-          <p className="text-sm uppercase tracking-[0.3em] text-emerald-300">
-            Overview
-          </p>
-          <h1 className="mt-4 text-3xl font-semibold">Dashboard</h1>
-          <p className="mt-3 max-w-2xl text-slate-300">
-            Your latest spending, budget status, and summary metrics all in one
-            place.
-          </p>
-        </div>
+    <AppShell
+      title="Dashboard"
+      description="Your latest spending, budget status, and summary metrics all in one place."
+    >
+      <ErrorMessage message={error} />
 
-        {error ? (
-          <div className="rounded-3xl border border-rose-400/30 bg-rose-500/10 p-5 text-rose-100">
-            {error}
-          </div>
-        ) : null}
+      {isLoading ? <Loader label="Loading dashboard data..." /> : null}
 
+      <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-3">
           <article className="rounded-3xl border border-white/10 bg-slate-950/60 p-6">
             <p className="text-sm text-slate-400">Total spending</p>
@@ -103,14 +97,11 @@ function DashboardPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <article className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+          <ChartCard
+            title="Recent transactions"
+            description="Latest activity from your account."
+          >
             <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Recent transactions</h2>
-                <p className="mt-2 text-sm text-slate-400">
-                  Latest activity from your account.
-                </p>
-              </div>
               {isLoading ? (
                 <span className="text-sm text-slate-400">Loading...</span>
               ) : null}
@@ -142,20 +133,19 @@ function DashboardPage() {
                 </div>
               )}
             </div>
-          </article>
+          </ChartCard>
 
-          <article className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <h2 className="text-xl font-semibold">Budget snapshot</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              Budget and chart modules will be expanded in the upcoming steps.
-            </p>
+          <ChartCard
+            title="Budget snapshot"
+            description="Budget and chart modules will be expanded in the upcoming steps."
+          >
             <div className="mt-6 rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-slate-400">
               Chart placeholder
             </div>
-          </article>
+          </ChartCard>
         </div>
       </div>
-    </section>
+    </AppShell>
   )
 }
 
