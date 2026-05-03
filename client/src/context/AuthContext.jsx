@@ -1,5 +1,6 @@
-import { createContext, useEffect, useState } from 'react'
+import { createContext, useEffect, useEffectEvent, useState } from 'react'
 
+import { registerUnauthorizedHandler } from '../services/api.js'
 import {
   clearStoredToken,
   getStoredToken,
@@ -34,6 +35,18 @@ function AuthProvider({ children }) {
     setToken(null)
     setUser(null)
   }
+
+  const handleUnauthorized = useEffectEvent(() => {
+    logout()
+  })
+
+  useEffect(() => {
+    registerUnauthorizedHandler(handleUnauthorized)
+
+    return () => {
+      registerUnauthorizedHandler(null)
+    }
+  }, [])
 
   const value = {
     isAuthenticated: Boolean(token),

@@ -7,7 +7,16 @@ import MonthlySpendingChart from '../components/MonthlySpendingChart.jsx'
 import useDashboardData from '../hooks/useDashboardData.js'
 
 function DashboardPage() {
-  const { error, expenses, isLoading, summary } = useDashboardData()
+  const {
+    budgetForm,
+    error,
+    expenses,
+    handleBudgetChange,
+    handleBudgetSubmit,
+    isLoading,
+    isSavingBudget,
+    summary,
+  } = useDashboardData()
 
   return (
     <AppShell
@@ -97,6 +106,53 @@ function DashboardPage() {
             <MonthlySpendingChart expenses={expenses} />
           </ChartCard>
         </div>
+
+        <ChartCard
+          title="Budget control"
+          description="Update the monthly spending ceiling for the selected month."
+        >
+          <form
+            className="grid gap-4 md:grid-cols-[0.8fr_1fr_auto]"
+            onSubmit={handleBudgetSubmit}
+          >
+            <label className="block">
+              <span className="mb-2 block text-sm text-[var(--text-secondary)]">
+                Month
+              </span>
+              <input
+                required
+                type="month"
+                name="month"
+                value={budgetForm.month}
+                onChange={handleBudgetChange}
+                className="w-full rounded-2xl border border-[var(--border-color)] bg-[var(--surface-card)] px-4 py-3 text-[var(--text-primary)] outline-none transition focus:border-[var(--accent-color)]"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm text-[var(--text-secondary)]">
+                Monthly limit
+              </span>
+              <input
+                required
+                min="1"
+                step="0.01"
+                type="number"
+                name="monthly_limit"
+                value={budgetForm.monthly_limit}
+                onChange={handleBudgetChange}
+                className="w-full rounded-2xl border border-[var(--border-color)] bg-[var(--surface-card)] px-4 py-3 text-[var(--text-primary)] outline-none transition focus:border-[var(--accent-color)]"
+                placeholder="5000"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={isSavingBudget}
+              className="mt-7 rounded-2xl bg-[var(--accent-color)] px-5 py-3 font-semibold text-[var(--accent-contrast)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSavingBudget ? 'Saving...' : 'Save budget'}
+            </button>
+          </form>
+        </ChartCard>
       </div>
     </AppShell>
   )
