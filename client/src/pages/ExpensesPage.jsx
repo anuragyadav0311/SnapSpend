@@ -10,6 +10,7 @@ function ExpensesPage() {
     editingId,
     error,
     expenses,
+    fieldErrors,
     formData,
     handleChange,
     handleDelete,
@@ -32,6 +33,7 @@ function ExpensesPage() {
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <ExpenseForm
             editingId={editingId}
+            fieldErrors={fieldErrors}
             formData={formData}
             isSaving={isSaving}
             onCancel={resetForm}

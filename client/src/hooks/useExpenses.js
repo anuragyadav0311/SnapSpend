@@ -6,6 +6,7 @@ import {
   fetchExpenses,
   updateExpense,
 } from '../services/expenseService.js'
+import { validateExpenseForm } from '../utils/validation.js'
 
 const initialFormState = {
   amount: '',
@@ -28,6 +29,7 @@ function useExpenses() {
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(initialFormState)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -63,17 +65,26 @@ function useExpenses() {
 
   function handleChange(event) {
     const { name, value } = event.target
+    setFieldErrors((current) => ({ ...current, [name]: '' }))
     setFormData((current) => ({ ...current, [name]: value }))
   }
 
   function resetForm() {
     setEditingId(null)
+    setFieldErrors({})
     setFormData(initialFormState)
   }
 
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
+    const nextErrors = validateExpenseForm(formData)
+    setFieldErrors(nextErrors)
+
+    if (Object.keys(nextErrors).length) {
+      return
+    }
+
     setIsSaving(true)
 
     try {
@@ -122,6 +133,7 @@ function useExpenses() {
     editingId,
     error,
     expenses,
+    fieldErrors,
     formData,
     handleChange,
     handleDelete,

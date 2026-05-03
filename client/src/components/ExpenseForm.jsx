@@ -1,5 +1,6 @@
 function ExpenseForm({
   editingId,
+  fieldErrors,
   formData,
   isSaving,
   onCancel,
@@ -47,6 +48,11 @@ function ExpenseForm({
             onChange={onChange}
             placeholder="125.50"
           />
+          {fieldErrors.amount ? (
+            <p className="mt-2 text-sm text-[var(--danger-color)]">
+              {fieldErrors.amount}
+            </p>
+          ) : null}
         </label>
         <label className="block">
           <span className="mb-2 block text-sm text-[var(--text-secondary)]">
@@ -61,6 +67,11 @@ function ExpenseForm({
             onChange={onChange}
             placeholder="Food & Dining"
           />
+          {fieldErrors.category ? (
+            <p className="mt-2 text-sm text-[var(--danger-color)]">
+              {fieldErrors.category}
+            </p>
+          ) : null}
         </label>
         <label className="block">
           <span className="mb-2 block text-sm text-[var(--text-secondary)]">

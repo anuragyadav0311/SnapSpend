@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import ThemeToggle from '../components/ThemeToggle.jsx'
 import useAuth from '../hooks/useAuth.js'
 import { loginUser } from '../services/authService.js'
+import { validateLoginForm } from '../utils/validation.js'
 
 function LoginPage() {
   const navigate = useNavigate()
@@ -14,16 +15,26 @@ function LoginPage() {
     password: '',
   })
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const notice = location.state?.notice
 
   function handleChange(event) {
     const { name, value } = event.target
+    setFieldErrors((current) => ({ ...current, [name]: '' }))
     setFormData((current) => ({ ...current, [name]: value }))
   }
 
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
+    const nextErrors = validateLoginForm(formData)
+    setFieldErrors(nextErrors)
+
+    if (Object.keys(nextErrors).length) {
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
@@ -51,6 +62,11 @@ function LoginPage() {
         <p className="mt-3 text-sm text-[var(--text-secondary)]">
           Access your expenses, monthly trends, and budget controls.
         </p>
+        {notice ? (
+          <p className="mt-6 rounded-2xl border border-[color:color-mix(in_srgb,var(--success-color)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--success-color)_12%,transparent)] px-4 py-3 text-sm text-[var(--success-color)]">
+            {notice}
+          </p>
+        ) : null}
         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
           <label className="block">
             <span className="mb-2 block text-sm text-[var(--text-secondary)]">
@@ -65,6 +81,11 @@ function LoginPage() {
               onChange={handleChange}
               placeholder="you@example.com"
             />
+            {fieldErrors.email ? (
+              <p className="mt-2 text-sm text-[var(--danger-color)]">
+                {fieldErrors.email}
+              </p>
+            ) : null}
           </label>
           <label className="block">
             <span className="mb-2 block text-sm text-[var(--text-secondary)]">
@@ -80,6 +101,11 @@ function LoginPage() {
               onChange={handleChange}
               placeholder="Minimum 8 characters"
             />
+            {fieldErrors.password ? (
+              <p className="mt-2 text-sm text-[var(--danger-color)]">
+                {fieldErrors.password}
+              </p>
+            ) : null}
           </label>
           {error ? (
             <p className="rounded-2xl border border-[color:color-mix(in_srgb,var(--danger-color)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--danger-color)_14%,transparent)] px-4 py-3 text-sm text-[var(--danger-color)]">
