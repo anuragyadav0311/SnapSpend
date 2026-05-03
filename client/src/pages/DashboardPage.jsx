@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import AppShell from '../components/AppShell.jsx'
+import CategoryPieChart from '../components/CategoryPieChart.jsx'
 import ChartCard from '../components/ChartCard.jsx'
 import ErrorMessage from '../components/ErrorMessage.jsx'
 import Loader from '../components/Loader.jsx'
+import MonthlySpendingChart from '../components/MonthlySpendingChart.jsx'
 import { fetchBudgets } from '../services/budgetService.js'
 import { fetchExpenses } from '../services/expenseService.js'
 
@@ -96,7 +98,7 @@ function DashboardPage() {
           </article>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <ChartCard
             title="Recent transactions"
             description="Latest activity from your account."
@@ -136,12 +138,19 @@ function DashboardPage() {
           </ChartCard>
 
           <ChartCard
-            title="Budget snapshot"
-            description="Budget and chart modules will be expanded in the upcoming steps."
+            title="Category distribution"
+            description="See where most of your money is going."
           >
-            <div className="mt-6 rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-slate-400">
-              Chart placeholder
-            </div>
+            <CategoryPieChart expenses={expenses} />
+          </ChartCard>
+        </div>
+
+        <div className="grid gap-6">
+          <ChartCard
+            title="Monthly spending"
+            description="Track spending patterns across months."
+          >
+            <MonthlySpendingChart expenses={expenses} />
           </ChartCard>
         </div>
       </div>
