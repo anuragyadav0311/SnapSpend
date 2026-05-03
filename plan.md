@@ -525,3 +525,220 @@ Build backend in modular architecture:
 - Use dependency injection
 - Ensure security best practices
 - Code must be production-ready, not tutorial-style
+
+
+
+
+⚙️ Phase 2: Frontend (React) — DETAILED EXECUTION PLAN
+🎯 Goal of Phase 2
+
+Build a clean, responsive, production-ready UI that:
+
+Authenticates users
+Displays expense data visually
+Communicates properly with backend APIs
+Feels like a real product
+🧱 Step 1: Project Setup
+LLM should:
+Create React app using Vite
+Install dependencies
+Required Dependencies:
+npm create vite@latest client -- --template react
+cd client
+npm install axios react-router-dom recharts
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+🧱 Step 2: Folder Structure (IMPORTANT)
+/client
+  /src
+    /components
+    /pages
+    /services
+    /context
+    /hooks
+    /utils
+    App.jsx
+    main.jsx
+🧱 Step 3: Routing Setup
+
+Use react-router-dom
+
+Routes:
+/login
+/register
+/dashboard
+/expenses
+Rules:
+Protect private routes
+Redirect if not authenticated
+🧱 Step 4: Authentication System
+LLM must implement:
+Auth Context
+Store JWT token
+Store user state
+Provide login/logout functions
+Local Storage
+Persist token
+Axios Interceptor
+Automatically attach token to headers
+🧱 Step 5: API Service Layer
+
+Create:
+
+services/api.js
+Responsibilities:
+Axios instance
+Base URL from env
+Interceptors (auth + error)
+🧱 Step 6: Pages (Core UI)
+1. Login Page
+Email + Password
+Call /auth/login
+2. Register Page
+Name + Email + Password
+Call /auth/register
+3. Dashboard Page
+Total expenses
+Charts (pie + bar)
+Recent transactions
+4. Expenses Page
+List all expenses
+Add / Edit / Delete
+🧱 Step 7: Components
+Must create reusable components:
+Navbar / Sidebar
+Expense Card
+Expense Form (modal or page)
+Chart Components
+Loader + Error components
+🧱 Step 8: Charts (Important for Resume)
+
+Use Recharts
+
+Required:
+Pie chart → category distribution
+Bar chart → monthly spending
+🧱 Step 9: State Management
+
+Keep it simple but clean:
+
+Auth → Context API
+Expenses → local state or custom hooks
+🧱 Step 10: UI/UX (THIS IS WHERE YOU WIN)
+Must include:
+Tailwind styling
+Responsive design
+Clean layout (sidebar + content)
+Dark mode toggle
+🧱 Step 11: Error Handling
+API errors
+Form validation
+Loading states
+🧱 Step 12: Integration
+Connect all APIs
+Ensure:
+Token sent in headers
+Data updates reflect instantly
+🧱 Step 13: Environment Setup
+VITE_API_URL=http://localhost:8000
+🧪 Phase 2 Checklist
+✅ Auth works
+✅ Protected routes
+✅ API integration
+✅ Charts working
+✅ Clean UI
+🚨 Common Mistakes
+❌ No structure (everything in one file)
+❌ No auth persistence
+❌ Hardcoded API URLs
+❌ Ugly UI (kills impression)
+🔥 PART 2: LLM PROMPTS FOR PHASE 2
+
+You can feed these step-by-step 👇
+
+🧠 Prompt 1: Setup
+Create a React frontend using Vite for an Expense Tracker app.
+
+Requirements:
+- Use functional components
+- Use Tailwind CSS
+- Install axios, react-router-dom, recharts
+- Setup clean folder structure:
+  components, pages, services, context, hooks
+
+Do not write everything in one file.
+Keep code modular and production-ready.
+🧠 Prompt 2: Routing + Auth Context
+Implement routing using react-router-dom.
+
+Requirements:
+- Routes: /login, /register, /dashboard, /expenses
+- Create protected routes (only accessible if logged in)
+- Create AuthContext:
+  - Store JWT token
+  - Store user info
+  - Provide login/logout functions
+- Persist token using localStorage
+
+Ensure clean and scalable implementation.
+🧠 Prompt 3: API Layer
+Create an API service layer using axios.
+
+Requirements:
+- Create axios instance
+- Base URL from environment variable (VITE_API_URL)
+- Add interceptor to attach JWT token
+- Handle API errors globally
+
+Keep it modular and reusable.
+🧠 Prompt 4: Auth Pages
+Create Login and Register pages.
+
+Requirements:
+- Forms with validation
+- Call backend APIs (/auth/login, /auth/register)
+- Store token on login
+- Redirect to dashboard after login
+- Show error messages
+
+Use Tailwind for clean UI.
+🧠 Prompt 5: Dashboard
+Create a dashboard page.
+
+Requirements:
+- Show total expenses
+- Show category-wise pie chart
+- Show monthly bar chart
+- Fetch data from backend
+
+Use Recharts for charts.
+Keep UI clean and responsive.
+🧠 Prompt 6: Expense Management
+Create expense management UI.
+
+Requirements:
+- List all expenses
+- Add expense form
+- Edit expense
+- Delete expense
+- Connect with backend APIs
+
+Ensure proper state updates and clean UI.
+🧠 Prompt 7: UI Polish
+Improve UI/UX of the app.
+
+Requirements:
+- Add sidebar navigation
+- Add dark mode toggle
+- Add loading states
+- Add error handling UI
+- Ensure responsiveness
+
+Make it look like a production-level app.
+🎯 Final Reality Check
+
+If you:
+
+Just display data → ❌ average
+Add charts + clean UI → ✅ good
+Add polish + UX + structure → 🔥 standout
