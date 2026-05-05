@@ -1,0 +1,11 @@
+Date,Type,Category,Title,Note,Amount
+2026-05-01,income,Salary,May 2026 Salary,Monthly salary credited,75000.00
+2026-05-03,income,Freelance,Logo design project,Freelance payment from client,15000.00
+2026-05-05,income,Investments,Mutual fund dividend,Quarterly dividend payout,5000.00
+2026-05-02,expense,Food & Dining,Dinner at restaurant,Family dinner,450.00
+2026-05-02,expense,Groceries,Weekly groceries,Big Basket order,3200.00
+2026-05-01,expense,Rent,Monthly rent,Apartment rent for May,18000.00
+2026-05-03,expense,Utilities,Electricity bill,April electricity,2500.00
+2026-05-04,expense,Transportation,Uber rides,Office commute this week,1500.00
+2026-05-01,expense,Subscriptions,Netflix subscription,Monthly streaming plan,999.00
+2026-05-04,expense,Entertainment,Movie tickets,Weekend movie with friends,700.00
