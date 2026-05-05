@@ -1,0 +1,202 @@
+[
+  {
+    "model": "transactions.category",
+    "pk": 1,
+    "fields": {
+      "user": null,
+      "name": "Salary",
+      "type": "income",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 2,
+    "fields": {
+      "user": null,
+      "name": "Freelance",
+      "type": "income",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 3,
+    "fields": {
+      "user": null,
+      "name": "Investments",
+      "type": "income",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 4,
+    "fields": {
+      "user": null,
+      "name": "Gifts Received",
+      "type": "income",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 5,
+    "fields": {
+      "user": null,
+      "name": "Refunds",
+      "type": "income",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 6,
+    "fields": {
+      "user": null,
+      "name": "Other Income",
+      "type": "income",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 7,
+    "fields": {
+      "user": null,
+      "name": "Food & Dining",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 8,
+    "fields": {
+      "user": null,
+      "name": "Groceries",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 9,
+    "fields": {
+      "user": null,
+      "name": "Transportation",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 10,
+    "fields": {
+      "user": null,
+      "name": "Rent",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 11,
+    "fields": {
+      "user": null,
+      "name": "Utilities",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 12,
+    "fields": {
+      "user": null,
+      "name": "Healthcare",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 13,
+    "fields": {
+      "user": null,
+      "name": "Entertainment",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 14,
+    "fields": {
+      "user": null,
+      "name": "Shopping",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 15,
+    "fields": {
+      "user": null,
+      "name": "Education",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 16,
+    "fields": {
+      "user": null,
+      "name": "Subscriptions",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 17,
+    "fields": {
+      "user": null,
+      "name": "Insurance",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 18,
+    "fields": {
+      "user": null,
+      "name": "Gifts & Donations",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 19,
+    "fields": {
+      "user": null,
+      "name": "Travel",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.category",
+    "pk": 20,
+    "fields": {
+      "user": null,
+      "name": "Other Expense",
+      "type": "expense",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  }
+]

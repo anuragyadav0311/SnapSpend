@@ -1,0 +1,152 @@
+[
+  {
+    "model": "transactions.transaction",
+    "fields": {
+      "user": 1,
+      "category": 1,
+      "type": "income",
+      "amount": "75000.00",
+      "title": "May 2026 Salary",
+      "note": "Monthly salary credited",
+      "date": "2026-05-01",
+      "created_at": "2026-05-01T09:00:00Z",
+      "updated_at": "2026-05-01T09:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+    "fields": {
+      "user": 1,
+      "category": 2,
+      "type": "income",
+      "amount": "15000.00",
+      "title": "Logo design project",
+      "note": "Freelance payment from client",
+      "date": "2026-05-03",
+      "created_at": "2026-05-03T14:30:00Z",
+      "updated_at": "2026-05-03T14:30:00Z"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+    "fields": {
+      "user": 1,
+      "category": 7,
+      "type": "expense",
+      "amount": "450.00",
+      "title": "Dinner at restaurant",
+      "note": "Family dinner",
+      "date": "2026-05-02",
+      "created_at": "2026-05-02T20:00:00Z",
+      "updated_at": "2026-05-02T20:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+    "fields": {
+      "user": 1,
+      "category": 8,
+      "type": "expense",
+      "amount": "3200.00",
+      "title": "Weekly groceries",
+      "note": "Big Basket order",
+      "date": "2026-05-02",
+      "created_at": "2026-05-02T11:00:00Z",
+      "updated_at": "2026-05-02T11:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+    "fields": {
+      "user": 1,
+      "category": 10,
+      "type": "expense",
+      "amount": "18000.00",
+      "title": "Monthly rent",
+      "note": "Apartment rent for May",
+      "date": "2026-05-01",
+      "created_at": "2026-05-01T10:00:00Z",
+      "updated_at": "2026-05-01T10:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+    "fields": {
+      "user": 1,
+      "category": 11,
+      "type": "expense",
+      "amount": "2500.00",
+      "title": "Electricity bill",
+      "note": "April electricity",
+      "date": "2026-05-03",
+      "created_at": "2026-05-03T09:30:00Z",
+      "updated_at": "2026-05-03T09:30:00Z"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+    "fields": {
+      "user": 1,
+      "category": 9,
+      "type": "expense",
+      "amount": "1500.00",
+      "title": "Uber rides",
+      "note": "Office commute this week",
+      "date": "2026-05-04",
+      "created_at": "2026-05-04T18:00:00Z",
+      "updated_at": "2026-05-04T18:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+    "fields": {
+      "user": 1,
+      "category": 16,
+      "type": "expense",
+      "amount": "999.00",
+      "title": "Netflix subscription",
+      "note": "Monthly streaming plan",
+      "date": "2026-05-01",
+      "created_at": "2026-05-01T00:05:00Z",
+      "updated_at": "2026-05-01T00:05:00Z"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+    "fields": {
+      "user": 1,
+      "category": 13,
+      "type": "expense",
+      "amount": "700.00",
+      "title": "Movie tickets",
+      "note": "Weekend movie with friends",
+      "date": "2026-05-04",
+      "created_at": "2026-05-04T15:00:00Z",
+      "updated_at": "2026-05-04T15:00:00Z"
+    }
+  },
+  {
+    "model": "transactions.transaction",
+    "fields": {
+      "user": 1,
+      "category": 3,
+      "type": "income",
+      "amount": "5000.00",
+      "title": "Mutual fund dividend",
+      "note": "Quarterly dividend payout",
+      "date": "2026-05-05",
+      "created_at": "2026-05-05T10:00:00Z",
+      "updated_at": "2026-05-05T10:00:00Z"
+    }
+  },
+  {
+    "model": "budgets.budget",
+    "fields": {
+      "user": 1,
+      "month": "2026-05-01",
+      "limit_amount": "40000.00",
+      "created_at": "2026-05-01T00:00:00Z",
+      "updated_at": "2026-05-01T00:00:00Z"
+    }
+  }
+]
