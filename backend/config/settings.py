@@ -1,9 +1,3 @@
-"""Minimal Django settings skeleton for the team.
-
-Keep this file as the shared backend-core ownership area.
-Member 1 will extend it with final JWT, CORS, PostgreSQL, and deployment settings.
-"""
-
 from datetime import timedelta
 from pathlib import Path
 
@@ -12,9 +6,18 @@ from decouple import Csv, config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def env_bool(name: str, default: bool) -> bool:
+    value = str(config(name, default=str(default))).strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    return default
+
 SECRET_KEY = config("SECRET_KEY", default="change-me")
-DEBUG = config("DEBUG", default=True, cast=bool)
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="127.0.0.1,localhost", cast=Csv())
+DEBUG = env_bool("DEBUG", True)
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="127.0.0.1,localhost,testserver", cast=Csv())
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -34,6 +37,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -85,11 +89,14 @@ STATIC_URL = "/static/"
 MEDIA_URL = "/media/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_ROOT = BASE_DIR / "media"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
 
-CORS_ALLOWED_ORIGINS = [config("FRONTEND_URL", default="http://localhost:5173")]
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
+CORS_ALLOWED_ORIGINS = [FRONTEND_URL]
+CSRF_TRUSTED_ORIGINS = [FRONTEND_URL]
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -103,4 +110,7 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
 }
