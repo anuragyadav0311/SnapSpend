@@ -1,6 +1,9 @@
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 
+from .views import BudgetViewSet
 
-urlpatterns = [
-    # TODO: Member 2 adds budget routes here.
-]
+router = DefaultRouter()
+router.register(r"budgets", BudgetViewSet, basename="budget")
+
+urlpatterns = [path("", include(router.urls))]
