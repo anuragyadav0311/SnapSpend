@@ -25,6 +25,8 @@ class LoginView(TokenObtainPairView):
 
 
 class MeView(generics.RetrieveUpdateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def get_object(self):
         return self.request.user
 
@@ -35,6 +37,8 @@ class MeView(generics.RetrieveUpdateAPIView):
 
 
 class ChangePasswordView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def put(self, request):
         serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -44,6 +48,8 @@ class ChangePasswordView(APIView):
 
 
 class LogoutView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def post(self, request):
         refresh_token = request.data.get("refresh")
         if not refresh_token:

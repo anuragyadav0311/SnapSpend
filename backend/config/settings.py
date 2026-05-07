@@ -15,9 +15,17 @@ def env_bool(name: str, default: bool) -> bool:
         return False
     return default
 
+
+def env_list(name: str, default: str) -> list[str]:
+    raw_value = config(name, default=default)
+    return [item.strip() for item in str(raw_value).split(",") if item.strip()]
+
 SECRET_KEY = config("SECRET_KEY", default="change-me")
 DEBUG = env_bool("DEBUG", True)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="127.0.0.1,localhost,testserver", cast=Csv())
+
+if not DEBUG and SECRET_KEY == "change-me":
+    raise ValueError("Set a strong SECRET_KEY in production.")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -74,6 +82,7 @@ DATABASES = {
         "PASSWORD": config("POSTGRES_PASSWORD", default="postgres"),
         "HOST": config("POSTGRES_HOST", default="localhost"),
         "PORT": config("POSTGRES_PORT", default="5432"),
+        "CONN_MAX_AGE": config("POSTGRES_CONN_MAX_AGE", default=60, cast=int),
     }
 }
 
@@ -99,8 +108,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
 
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
-CORS_ALLOWED_ORIGINS = [FRONTEND_URL]
-CSRF_TRUSTED_ORIGINS = [FRONTEND_URL]
+FRONTEND_URLS = env_list("FRONTEND_URLS", default=FRONTEND_URL)
+CORS_ALLOWED_ORIGINS = FRONTEND_URLS
+CSRF_TRUSTED_ORIGINS = FRONTEND_URLS
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -118,3 +128,11 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", not DEBUG)
+SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=0 if DEBUG else 3600, cast=int)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
+SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", False)
