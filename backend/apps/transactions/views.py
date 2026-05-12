@@ -5,30 +5,42 @@ Member 2 will implement:
 - transaction CRUD
 - filter/search/sort behavior
 """
-from rest_framework import viewsets, permissions
+from rest_framework import serializers
 from .models import Category, Transaction
-from .serializers import CategorySerializer, TransactionSerializer
 
 
-class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.all()
-    serializer_class = CategorySerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return self.queryset.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ["id", "name", "type", "created_at"]
+        read_only_fields = ["id", "created_at"]
 
 
-class TransactionViewSet(viewsets.ModelViewSet):
-    queryset = Transaction.objects.all()
-    serializer_class = TransactionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+class TransactionSerializer(serializers.ModelSerializer):
+    category_name = serializers.ReadOnlyField(source="category.name")
 
-    def get_queryset(self):
-        return self.queryset.filter(user=self.request.user)
+    class Meta:
+        model = Transaction
+        fields = [
+            "id",
+            "type",
+            "amount",
+            "category",
+            "category_name",
+            "title",
+            "note",
+            "date",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be positive")
+        return value
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        validated_data["user"] = request.user
+        return super().create(validated_data)
