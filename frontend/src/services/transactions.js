@@ -99,13 +99,13 @@ function getNextId(items) {
   return items.reduce((maxId, item) => Math.max(maxId, Number(item.id) || 0), 0) + 1;
 }
 
-export async function listTransactions() {
+export async function listTransactions(params = {}) {
   if (FRONTEND_ONLY_MODE) {
     return getMockTransactions();
   }
 
   try {
-    const response = await api.get("/transactions/");
+    const response = await api.get("/transactions/", { params });
     return response.data;
   } catch (error) {
     throw new Error(getApiErrorMessage(error, "Unable to load transactions."));
@@ -222,5 +222,22 @@ export async function createCategory(payload) {
     return response.data;
   } catch (error) {
     throw new Error(getApiErrorMessage(error, "Unable to create the category."));
+  }
+}
+
+export async function updateCategory(id, payload) {
+  try {
+    const response = await api.put(`/categories/${id}/`, payload);
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, "Unable to update the category."));
+  }
+}
+
+export async function deleteCategory(id) {
+  try {
+    await api.delete(`/categories/${id}/`);
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, "Unable to delete the category."));
   }
 }

@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 
 User = get_user_model()
 
-# Category Model
+
 class Category(models.Model):
     TYPE_CHOICES = (
         ('income', 'Income'),
@@ -26,7 +26,6 @@ class Category(models.Model):
         return f"{self.name} ({self.type})"
 
 
-# Transaction Model
 class Transaction(models.Model):
     TYPE_CHOICES = (
         ('income', 'Income'),
@@ -35,7 +34,7 @@ class Transaction(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transactions")
     type = models.CharField(max_length=10, choices=TYPE_CHOICES, db_index=True)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)  # allows larger amounts
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name="transactions")
     title = models.CharField(max_length=255)
     note = models.TextField(blank=True)
@@ -52,6 +51,5 @@ class Transaction(models.Model):
         return f"{self.title} - {self.amount} ({self.type})"
 
     def clean(self):
-        # Ensure transaction type matches category type
         if self.category and self.type != self.category.type:
             raise ValidationError("Transaction type must match category type.")

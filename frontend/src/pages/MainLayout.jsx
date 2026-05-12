@@ -397,7 +397,7 @@ const NAV_ITEMS = [
     { to: "/dashboard", label: "Dashboard", icon: "grid" },
     { to: "/transactions", label: "Transactions", icon: "list" },
     { to: "/budgets", label: "Budgets", icon: "pie" },
-    { to: "/insights", label: "Insights", icon: "trending" },
+    { to: "/insights", label: "Reports", icon: "trending" },
     { to: "/profile", label: "Profile", icon: "user" },
 ];
 

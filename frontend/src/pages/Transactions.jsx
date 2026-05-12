@@ -680,6 +680,9 @@ export default function Transactions() {
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
+  const [activeType, setActiveType] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [sortBy, setSortBy] = useState("newest");
   const [draft, setDraft] = useState({
     title: "",
@@ -748,13 +751,16 @@ export default function Transactions() {
     const query = search.trim().toLowerCase();
     const result = transactions.filter((transaction) => {
       const matchesCategory = activeCategory === "All" || transaction.category === activeCategory;
+      const matchesType = activeType === "all" || transaction.kind === activeType;
+      const matchesStart = !startDate || transaction.date >= startDate;
+      const matchesEnd = !endDate || transaction.date <= endDate;
       const matchesSearch =
         !query ||
         transaction.title.toLowerCase().includes(query) ||
         transaction.note.toLowerCase().includes(query) ||
         transaction.category.toLowerCase().includes(query);
 
-      return matchesCategory && matchesSearch;
+      return matchesCategory && matchesType && matchesStart && matchesEnd && matchesSearch;
     });
 
     result.sort((left, right) => {
@@ -774,7 +780,7 @@ export default function Transactions() {
     });
 
     return result;
-  }, [activeCategory, search, sortBy, transactions]);
+  }, [activeCategory, activeType, endDate, search, sortBy, startDate, transactions]);
 
   const grouped = useMemo(() => {
     const groups = {};
@@ -1075,6 +1081,27 @@ export default function Transactions() {
           <option value="highest">Sort: Highest</option>
           <option value="lowest">Sort: Lowest</option>
         </select>
+        <select className="sort-select" value={activeType} onChange={(event) => setActiveType(event.target.value)}>
+          <option value="all">Type: All</option>
+          <option value="income">Type: Income</option>
+          <option value="expense">Type: Expense</option>
+        </select>
+        <input className="sort-select" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+        <input className="sort-select" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+        <button
+          className="sort-select"
+          type="button"
+          onClick={() => {
+            setActiveType("all");
+            setStartDate("");
+            setEndDate("");
+            setSearch("");
+            setActiveCategory("All");
+            setSortBy("newest");
+          }}
+        >
+          Reset
+        </button>
       </div>
 
       <div style={{ opacity: 0, animation: "riseIn 0.6s 0.35s cubic-bezier(0.22,1,0.36,1) forwards" }}>
