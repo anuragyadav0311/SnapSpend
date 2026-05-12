@@ -1,33 +1,65 @@
 import { useEffect } from "react";
 
 export const LEDGER_TICKER_ITEMS = [
-  { label: "Food & Dining", val: "₹18,240", dir: "down" },
-  { label: "Transport", val: "₹6,800", dir: "down" },
-  { label: "Housing", val: "₹45,000", dir: "up" },
-  { label: "Entertainment", val: "₹4,200", dir: "down" },
+  { label: "Food & Dining", val: "\u20B918,240", dir: "down" },
+  { label: "Transport", val: "\u20B96,800", dir: "down" },
+  { label: "Housing", val: "\u20B945,000", dir: "up" },
+  { label: "Entertainment", val: "\u20B94,200", dir: "down" },
   { label: "Savings Rate", val: "34.2%", dir: "up" },
   { label: "Budget Health", val: "Good", dir: "up" },
-  { label: "Subscriptions", val: "₹2,100", dir: "down" },
-  { label: "Investments", val: "₹30,000", dir: "up" },
+  { label: "Subscriptions", val: "\u20B92,100", dir: "down" },
+  { label: "Investments", val: "\u20B930,000", dir: "up" },
 ];
 
-const PARTICLE_SYMBOLS = ["₹", "₹", "₹", "%", "↑", "↓", "∑", "₹", "•", "₹"];
-const PARTICLE_COLORS = [
-  "rgba(179,207,187,0.18)",
-  "rgba(232,201,122,0.15)",
-  "rgba(184,112,112,0.12)",
-  "rgba(168,144,111,0.14)",
-  "rgba(255,255,255,0.07)",
-];
+const PARTICLE_SYMBOLS = ["\u20B9", "\u20B9", "\u20B9", "%", "\u2191", "\u2193", "\u2211", "\u20B9", "\u2022", "\u20B9"];
 
-function makeParticle(width, height) {
+const CANVAS_PALETTES = {
+  dark: {
+    particleColors: [
+      "rgba(179,207,187,0.18)",
+      "rgba(232,201,122,0.15)",
+      "rgba(184,112,112,0.12)",
+      "rgba(168,144,111,0.14)",
+      "rgba(255,255,255,0.07)",
+    ],
+    grid: "rgba(255,255,255,0.028)",
+    chartTop: "rgba(122,158,135,0.14)",
+    chartMid: "rgba(122,158,135,0.03)",
+    chartBottom: "rgba(122,158,135,0)",
+    chartLine: "rgba(122,158,135,0.35)",
+    chartDot: "rgba(179,207,187,0.8)",
+    chartPulse: "rgba(179,207,187,0.2)",
+    bar: "rgba(122,158,135,0.06)",
+    barActive: "rgba(201,151,58,0.12)",
+  },
+  light: {
+    particleColors: [
+      "rgba(79,122,97,0.16)",
+      "rgba(203,142,51,0.16)",
+      "rgba(185,105,105,0.12)",
+      "rgba(138,112,89,0.14)",
+      "rgba(59,44,31,0.08)",
+    ],
+    grid: "rgba(97,74,51,0.08)",
+    chartTop: "rgba(110,156,123,0.22)",
+    chartMid: "rgba(110,156,123,0.08)",
+    chartBottom: "rgba(110,156,123,0)",
+    chartLine: "rgba(79,122,97,0.5)",
+    chartDot: "rgba(79,122,97,0.8)",
+    chartPulse: "rgba(79,122,97,0.24)",
+    bar: "rgba(110,156,123,0.14)",
+    barActive: "rgba(203,142,51,0.18)",
+  },
+};
+
+function makeParticle(width, height, particleColors) {
   return {
     x: Math.random() * width,
     y: height + 20,
     vx: (Math.random() - 0.5) * 0.22,
     vy: -(0.18 + Math.random() * 0.28),
     sym: PARTICLE_SYMBOLS[Math.floor(Math.random() * PARTICLE_SYMBOLS.length)],
-    color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)],
+    color: particleColors[Math.floor(Math.random() * particleColors.length)],
     size: 10 + Math.random() * 12,
     alpha: 0.1 + Math.random() * 0.5,
     life: 0.6 + Math.random() * 0.4,
@@ -36,7 +68,7 @@ function makeParticle(width, height) {
   };
 }
 
-export function useLedgerCanvas(canvasRef) {
+export function useLedgerCanvas(canvasRef, theme = "dark") {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -51,18 +83,19 @@ export function useLedgerCanvas(canvasRef) {
     let animationFrameId = null;
     let width = window.innerWidth;
     let height = window.innerHeight;
+    const palette = CANVAS_PALETTES[theme] ?? CANVAS_PALETTES.dark;
 
     canvas.width = width;
     canvas.height = height;
 
     const particleCount = Math.min(40, Math.floor((width * height) / 22000));
-    const particles = Array.from({ length: particleCount }, () => makeParticle(width, height));
+    const particles = Array.from({ length: particleCount }, () => makeParticle(width, height, palette.particleColors));
     const chartPoints = [0.68, 0.55, 0.72, 0.48, 0.62, 0.38, 0.52, 0.31, 0.44, 0.28];
 
     const drawFrame = (time) => {
       ctx.clearRect(0, 0, width, height);
 
-      ctx.strokeStyle = "rgba(255,255,255,0.028)";
+      ctx.strokeStyle = palette.grid;
       ctx.lineWidth = 1;
       for (let x = 0; x < width; x += 60) {
         ctx.beginPath();
@@ -87,9 +120,9 @@ export function useLedgerCanvas(canvasRef) {
       }));
 
       const gradient = ctx.createLinearGradient(0, chartY, 0, chartY + chartHeight);
-      gradient.addColorStop(0, "rgba(122,158,135,0.14)");
-      gradient.addColorStop(0.6, "rgba(122,158,135,0.03)");
-      gradient.addColorStop(1, "rgba(122,158,135,0)");
+      gradient.addColorStop(0, palette.chartTop);
+      gradient.addColorStop(0.6, palette.chartMid);
+      gradient.addColorStop(1, palette.chartBottom);
 
       ctx.beginPath();
       ctx.moveTo(points[0].x, points[0].y);
@@ -109,18 +142,18 @@ export function useLedgerCanvas(canvasRef) {
         const cx = (points[index - 1].x + points[index].x) / 2;
         ctx.bezierCurveTo(cx, points[index - 1].y, cx, points[index].y, points[index].x, points[index].y);
       }
-      ctx.strokeStyle = "rgba(122,158,135,0.35)";
+      ctx.strokeStyle = palette.chartLine;
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
       const lastPoint = points[points.length - 1];
       ctx.beginPath();
       ctx.arc(lastPoint.x, lastPoint.y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(179,207,187,0.8)";
+      ctx.fillStyle = palette.chartDot;
       ctx.fill();
       ctx.beginPath();
       ctx.arc(lastPoint.x, lastPoint.y, 8 + Math.sin(time * 0.003) * 3, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(179,207,187,0.2)";
+      ctx.strokeStyle = palette.chartPulse;
       ctx.lineWidth = 1;
       ctx.stroke();
 
@@ -128,7 +161,7 @@ export function useLedgerCanvas(canvasRef) {
       bars.forEach((barHeight, index) => {
         const h = height * 0.18 * barHeight;
         const barX = width * 0.1 + index * 48;
-        ctx.fillStyle = index === bars.length - 1 ? "rgba(201,151,58,0.12)" : "rgba(122,158,135,0.06)";
+        ctx.fillStyle = index === bars.length - 1 ? palette.barActive : palette.bar;
         ctx.beginPath();
         ctx.roundRect(barX, height * 0.75 - h, 18, h, [3, 3, 0, 0]);
         ctx.fill();
@@ -140,7 +173,7 @@ export function useLedgerCanvas(canvasRef) {
         particle.life -= particle.decay;
 
         if (particle.life <= 0 || particle.y < -40) {
-          particles[index] = makeParticle(width, height);
+          particles[index] = makeParticle(width, height, palette.particleColors);
           return;
         }
 
@@ -173,5 +206,5 @@ export function useLedgerCanvas(canvasRef) {
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [canvasRef]);
+  }, [canvasRef, theme]);
 }

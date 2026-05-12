@@ -1,8 +1,20 @@
 from django.urls import path
-from .views import ReportCSVView, ReportExcelView, ReportPDFView
+
+from .views import (
+    CategorySummaryView,
+    DashboardReportView,
+    MonthlyReportView,
+    ReportCSVView,
+    ReportExcelView,
+    ReportPDFView,
+)
+
 
 urlpatterns = [
-    path("reports/csv/", ReportCSVView.as_view(), name="report-csv"),
-    path("reports/excel/", ReportExcelView.as_view(), name="report-excel"),
-    path("reports/pdf/", ReportPDFView.as_view(), name="report-pdf"),
+    path("dashboard/", DashboardReportView.as_view(), name="reports-dashboard"),
+    path("monthly/", MonthlyReportView.as_view(), name="reports-monthly"),
+    path("category-summary/", CategorySummaryView.as_view(), name="reports-category-summary"),
+    path("export/csv/", ReportCSVView.as_view(), name="reports-export-csv"),
+    path("export/xlsx/", ReportExcelView.as_view(), name="reports-export-xlsx"),
+    path("export/pdf/", ReportPDFView.as_view(), name="reports-export-pdf"),
 ]

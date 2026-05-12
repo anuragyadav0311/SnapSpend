@@ -1,8 +1,5 @@
-"""Budget views TODO.
+from rest_framework import permissions, viewsets
 
-Member 2 will implement budget CRUD and monthly budget status here.
-"""
-from rest_framework import viewsets, permissions
 from .models import Budget
 from .serializers import BudgetSerializer
 
@@ -10,6 +7,7 @@ from .serializers import BudgetSerializer
 class BudgetViewSet(viewsets.ModelViewSet):
     serializer_class = BudgetSerializer
     permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "post", "put", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
         return Budget.objects.filter(user=self.request.user)

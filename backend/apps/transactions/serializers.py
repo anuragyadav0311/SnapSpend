@@ -1,8 +1,5 @@
-"""Transactions serializers TODO.
-
-Member 2 will implement category and transaction serializers here.
-"""
 from rest_framework import serializers
+
 from .models import Category, Transaction
 
 
@@ -11,6 +8,9 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = ["id", "name", "type", "created_at"]
         read_only_fields = ["id", "created_at"]
+
+    def validate_name(self, value):
+        return value.strip()
 
 
 class TransactionSerializer(serializers.ModelSerializer):
@@ -34,8 +34,22 @@ class TransactionSerializer(serializers.ModelSerializer):
 
     def validate_amount(self, value):
         if value <= 0:
-            raise serializers.ValidationError("Amount must be positive")
+            raise serializers.ValidationError("Amount must be positive.")
         return value
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        instance = getattr(self, "instance", None)
+        category = attrs.get("category", getattr(instance, "category", None))
+        tx_type = attrs.get("type", getattr(instance, "type", None))
+
+        if category:
+            if request and category.user_id not in {None, request.user.id}:
+                raise serializers.ValidationError({"category": "You cannot use another user's category."})
+            if tx_type and category.type != tx_type:
+                raise serializers.ValidationError({"category": "Category type must match transaction type."})
+
+        return attrs
 
     def create(self, validated_data):
         request = self.context.get("request")
