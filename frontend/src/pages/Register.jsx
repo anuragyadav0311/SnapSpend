@@ -1,39 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
+import { LEDGER_THEME_CSS } from "../styles/ledgerTheme";
 import { LEDGER_TICKER_ITEMS, useLedgerCanvas } from "../utils/ledgerScene";
 
 const STYLES = `
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Figtree:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap');
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-:root {
-  --bg: #0f0e0c;
-  --sand-50: #faf8f4;
-  --sand-100: #f2ebe0;
-  --sand-200: #e2d5c3;
-  --sand-300: #c9b89e;
-  --sand-400: #a8906f;
-  --sand-500: #8a7252;
-  --sage: #7a9e87;
-  --sage-l: #b3cfbb;
-  --sage-d: #4f7a61;
-  --amber: #c9973a;
-  --amber-l: #e8c97a;
-  --rose: #b87070;
-  --ink: #1a1714;
-  --glass-bg: rgba(15,14,12,0.55);
-  --glass-border: rgba(255,255,255,0.08);
-}
-
-html, body, #root {
-  height: 100%;
-  font-family: 'Figtree', sans-serif;
-  background: var(--bg);
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-}
+${LEDGER_THEME_CSS}
 
 canvas.bg { position: fixed; inset: 0; z-index: 0; }
 
@@ -43,9 +16,9 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   z-index: 1;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 60% 50% at 20% 25%, rgba(122,158,135,0.12) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 60% at 80% 75%, rgba(201,151,58,0.09) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 40% at 50% 50%, rgba(184,112,112,0.06) 0%, transparent 70%);
+    radial-gradient(ellipse 60% 50% at 20% 25%, var(--mesh-1) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 75%, var(--mesh-2) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 40% at 50% 50%, var(--mesh-3) 0%, transparent 70%);
   animation: meshDrift 22s ease-in-out infinite alternate;
 }
 
@@ -58,7 +31,7 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   position: fixed;
   inset: 0;
   z-index: 2;
-  opacity: 0.032;
+  opacity: var(--noise-opacity);
   pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 256px;
@@ -87,10 +60,10 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   backdrop-filter: blur(28px) saturate(140%);
   -webkit-backdrop-filter: blur(28px) saturate(140%);
   box-shadow:
-    0 0 0 1px rgba(255,255,255,0.04) inset,
-    0 2px 0 rgba(255,255,255,0.06) inset,
-    0 40px 80px rgba(0,0,0,0.6),
-    0 0 120px rgba(122,158,135,0.06);
+    0 0 0 1px var(--surface-soft-2) inset,
+    0 2px 0 var(--surface-border) inset,
+    var(--card-shadow),
+    var(--card-glow);
   margin: 0 auto;
   opacity: 0;
   transform: translateY(28px) scale(0.97);
@@ -104,7 +77,7 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   left: 20%;
   right: 20%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+  background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
   border-radius: 50%;
 }
 
@@ -191,8 +164,8 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   font-size: 11px;
   font-family: 'DM Mono', monospace;
   transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--surface-stronger);
+  background: var(--surface-soft-2);
   color: var(--sand-500);
 }
 
@@ -200,12 +173,12 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   background: var(--sage-d);
   border-color: var(--sage-l);
   color: #fff;
-  box-shadow: 0 0 16px rgba(122,158,135,0.45);
+  box-shadow: 0 0 16px var(--focus-ring);
 }
 
 .step-circle.done {
-  background: rgba(122,158,135,0.2);
-  border-color: rgba(179,207,187,0.5);
+  background: var(--focus-fill);
+  border-color: var(--sage);
   color: var(--sage-l);
 }
 
@@ -223,12 +196,12 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
 .step-line {
   flex: 1;
   height: 1px;
-  background: rgba(255,255,255,0.06);
+  background: var(--surface-border);
   margin: 0 6px 16px;
   transition: background 0.4s;
 }
 
-.step-line.done { background: rgba(122,158,135,0.4); }
+.step-line.done { background: var(--sage); }
 
 .panel {
   display: none;
@@ -275,8 +248,8 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
 
 .inp {
   width: 100%;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.09);
+  background: var(--surface-soft-2);
+  border: 1px solid var(--surface-strong);
   border-radius: 11px;
   padding: 11px 14px;
   font-family: 'Figtree', sans-serif;
@@ -288,17 +261,26 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   appearance: none;
 }
 
-.inp::placeholder { color: rgba(168,144,111,0.4); }
+select.inp {
+  color-scheme: dark;
+}
+
+select.inp option {
+  background: #f6efe4;
+  color: #231a12;
+}
+
+.inp::placeholder { color: var(--input-placeholder); }
 
 .inp:focus {
-  border-color: rgba(122,158,135,0.55);
-  background: rgba(122,158,135,0.05);
-  box-shadow: 0 0 0 3px rgba(122,158,135,0.1), 0 1px 0 rgba(255,255,255,0.04) inset;
+  border-color: var(--sage);
+  background: var(--focus-fill);
+  box-shadow: 0 0 0 3px var(--focus-ring), 0 1px 0 var(--surface-soft-2) inset;
 }
 
 .inp.err {
-  border-color: rgba(184,112,112,0.55);
-  box-shadow: 0 0 0 3px rgba(184,112,112,0.1);
+  border-color: var(--rose);
+  box-shadow: 0 0 0 3px var(--error-ring);
   animation: shake 0.35s ease;
 }
 
@@ -350,7 +332,7 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   height: 3px;
   flex: 1;
   border-radius: 2px;
-  background: rgba(255,255,255,0.07);
+  background: var(--surface-hover);
   transition: background 0.4s;
 }
 
@@ -378,12 +360,12 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   justify-content: center;
   font-size: 15px;
   border: 2px solid transparent;
-  background: rgba(255,255,255,0.05);
+  background: var(--surface-soft-3);
 }
 
 .avatar-opt.sel {
   border-color: var(--sage-l);
-  box-shadow: 0 0 0 3px rgba(122,158,135,0.2);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .pill {
@@ -391,17 +373,17 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   border-radius: 20px;
   font-size: 12px;
   font-weight: 400;
-  border: 1px solid rgba(255,255,255,0.09);
-  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--surface-strong);
+  background: var(--surface-soft-2);
   color: var(--sand-400);
 }
 
 .pill:hover,
-.avatar-opt:hover { background: rgba(255,255,255,0.07); }
+.avatar-opt:hover { background: var(--surface-hover); }
 
 .pill.sel {
-  background: rgba(79,122,97,0.35);
-  border-color: rgba(122,158,135,0.6);
+  background: var(--focus-fill);
+  border-color: var(--sage);
   color: var(--sage-l);
 }
 
@@ -421,7 +403,7 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   letter-spacing: 0.04em;
   color: var(--ink);
   background: linear-gradient(135deg, var(--sage-l) 0%, var(--amber-l) 100%);
-  box-shadow: 0 4px 24px rgba(122,158,135,0.3), 0 1px 0 rgba(255,255,255,0.3) inset;
+  box-shadow: var(--btn-shadow);
   transition: transform 0.15s, box-shadow 0.2s, filter 0.2s;
 }
 
@@ -429,7 +411,7 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
   background-size: 200% auto;
   opacity: 0;
   transition: opacity 0.3s;
@@ -442,7 +424,7 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
 
 .btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(122,158,135,0.4), 0 1px 0 rgba(255,255,255,0.3) inset;
+  box-shadow: var(--btn-shadow-hover);
   filter: brightness(1.05);
 }
 
@@ -479,7 +461,7 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   width: 100%;
   padding: 11px;
   border-radius: 11px;
-  border: 1px solid rgba(255,255,255,0.09);
+  border: 1px solid var(--surface-strong);
   background: none;
   cursor: pointer;
   font-family: 'Figtree', sans-serif;
@@ -490,7 +472,7 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   margin-top: 8px;
 }
 
-.btn-ghost:hover { background: rgba(255,255,255,0.04); color: var(--sand-200); }
+.btn-ghost:hover { background: var(--surface-soft-2); color: var(--sand-200); }
 
 .divider {
   display: flex;
@@ -502,7 +484,7 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
 .divider-line {
   flex: 1;
   height: 1px;
-  background: rgba(255,255,255,0.07);
+  background: var(--surface-hover);
 }
 
 .divider-txt {
@@ -525,8 +507,8 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   gap: 7px;
   padding: 10px;
   border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.09);
-  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--surface-strong);
+  background: var(--surface-soft);
   cursor: pointer;
   font-family: 'Figtree', sans-serif;
   font-size: 12.5px;
@@ -534,7 +516,7 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   transition: all 0.2s;
 }
 
-.social-btn:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.14); }
+.social-btn:hover { background: var(--surface-hover); border-color: var(--surface-border-3); }
 
 .card-footer {
   margin-top: 18px;
@@ -576,9 +558,9 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
 .chk-box {
   width: 16px;
   height: 16px;
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid var(--surface-stronger);
   border-radius: 4px;
-  background: rgba(255,255,255,0.03);
+  background: var(--surface-soft);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -617,8 +599,8 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   overflow: hidden;
   display: flex;
   align-items: center;
-  border-top: 1px solid rgba(255,255,255,0.04);
-  background: rgba(15,14,12,0.6);
+  border-top: 1px solid var(--ticker-border);
+  background: var(--ticker-bg);
   backdrop-filter: blur(8px);
 }
 
@@ -643,7 +625,7 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   font-size: 11px;
   font-weight: 300;
   color: var(--sand-500);
-  border-right: 1px solid rgba(255,255,255,0.05);
+  border-right: 1px solid var(--surface-border-2);
 }
 
 .ticker-item .up { color: var(--sage-l); }
@@ -654,15 +636,15 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   bottom: 52px;
   left: 50%;
   transform: translateX(-50%) translateY(60px);
-  background: rgba(15,14,12,0.92);
-  border: 1px solid rgba(122,158,135,0.3);
+  background: var(--toast-bg);
+  border: 1px solid var(--toast-border);
   color: var(--sand-100);
   padding: 12px 22px;
   border-radius: 12px;
   font-size: 13.5px;
   font-weight: 500;
   backdrop-filter: blur(16px);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  box-shadow: var(--toast-shadow);
   transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s;
   opacity: 0;
   z-index: 999;
@@ -701,13 +683,13 @@ canvas.bg { position: fixed; inset: 0; z-index: 0; }
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: rgba(79,122,97,0.25);
-  border: 2px solid rgba(122,158,135,0.5);
+  background: var(--focus-fill);
+  border: 2px solid var(--sage);
   display: flex;
   align-items: center;
   justify-content: center;
   animation: popIn 0.5s 0.1s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  box-shadow: 0 0 32px rgba(122,158,135,0.25);
+  box-shadow: 0 0 32px var(--focus-ring);
 }
 
 @keyframes popIn {
@@ -800,8 +782,12 @@ export default function Register() {
   const enteringTimeoutRef = useRef(null);
   const submitTimeoutRef = useRef(null);
   const toastTimeoutRef = useRef(null);
+  const navigate = useNavigate();
+  const { register } = useAuth();
 
-  useLedgerCanvas(canvasRef);
+  const { theme } = useTheme();
+
+  useLedgerCanvas(canvasRef, theme);
 
   const [step, setStep] = useState(0);
   const [exitingStep, setExitingStep] = useState(null);
@@ -832,6 +818,7 @@ export default function Register() {
     confirmPassword: false,
     terms: false,
   });
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     return () => {
@@ -906,6 +893,9 @@ export default function Register() {
       clearTimeout(toastTimeoutRef.current);
     }
     toastTimeoutRef.current = setTimeout(() => setToastVisible(false), 3500);
+    window.setTimeout(() => {
+      navigate("/dashboard");
+    }, 300);
   };
 
   const handleSubmit = async () => {
@@ -914,11 +904,26 @@ export default function Register() {
     }
 
     setSubmitting(true);
-    await new Promise((resolve) => {
-      submitTimeoutRef.current = setTimeout(resolve, 1800);
-    });
-    setSubmitting(false);
-    goTo(3);
+    setSubmitError("");
+
+    try {
+      await register({
+        name: `${form.firstName.trim()} ${form.lastName.trim()}`.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        remember: true,
+      });
+
+      await new Promise((resolve) => {
+        submitTimeoutRef.current = setTimeout(resolve, 600);
+      });
+
+      goTo(3);
+    } catch (error) {
+      setSubmitError(error.message || "Unable to create your account right now.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const passwordStrength = getPasswordStrength(form.password);
@@ -1148,7 +1153,7 @@ export default function Register() {
                       background:
                         segment < passwordStrength && passwordStrength > 0
                           ? PASSWORD_STRENGTH_COLORS[passwordStrength - 1]
-                          : "rgba(255,255,255,0.07)",
+                          : "var(--surface-hover)",
                     }}
                   />
                 ))}
@@ -1291,18 +1296,18 @@ export default function Register() {
               <div className="input-wrap">
                 <select
                   className="inp"
-                  style={{ cursor: "pointer", color: "var(--sand-300)", background: "#1a1714" }}
+                  style={{ cursor: "pointer", color: "var(--sand-300)", background: "var(--surface-soft-2)" }}
                   value={form.referralSource}
                   onChange={(event) => setField("referralSource", event.target.value)}
                   onFocus={() => setFocus((current) => ({ ...current, referralSource: true }))}
                   onBlur={() => setFocus((current) => ({ ...current, referralSource: false }))}
                 >
-                  <option value="" style={{ background: "#1a1714" }}>Select an option...</option>
-                  <option value="friend" style={{ background: "#1a1714" }}>Friend or colleague</option>
-                  <option value="social" style={{ background: "#1a1714" }}>Social media</option>
-                  <option value="search" style={{ background: "#1a1714" }}>Search engine</option>
-                  <option value="ad" style={{ background: "#1a1714" }}>Advertisement</option>
-                  <option value="blog" style={{ background: "#1a1714" }}>Blog / article</option>
+                  <option value="" style={{ background: "var(--bg)", color: "var(--sand-50)" }}>Select an option...</option>
+                  <option value="friend" style={{ background: "var(--bg)", color: "var(--sand-50)" }}>Friend or colleague</option>
+                  <option value="social" style={{ background: "var(--bg)", color: "var(--sand-50)" }}>Social media</option>
+                  <option value="search" style={{ background: "var(--bg)", color: "var(--sand-50)" }}>Search engine</option>
+                  <option value="ad" style={{ background: "var(--bg)", color: "var(--sand-50)" }}>Advertisement</option>
+                  <option value="blog" style={{ background: "var(--bg)", color: "var(--sand-50)" }}>Blog / article</option>
                 </select>
               </div>
             </div>
@@ -1314,6 +1319,7 @@ export default function Register() {
                   {submitting ? "Creating account..." : "Create My Account →"}
                 </div>
               </button>
+              {submitError && <div className="err-text" style={{ marginTop: 10 }}>{submitError}</div>}
               <button className="btn-ghost" type="button" onClick={() => goTo(1)}>← Back</button>
             </div>
           </div>
@@ -1336,7 +1342,7 @@ export default function Register() {
           {step < 3 && (
             <div className="card-footer">
               Already have an account?
-              <Link to="/" className="login-link">Sign in →</Link>
+              <Link to="/login" className="login-link">Sign in →</Link>
             </div>
           )}
         </div>

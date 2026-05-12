@@ -1,39 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
+import { LEDGER_THEME_CSS } from "../styles/ledgerTheme";
 import { LEDGER_TICKER_ITEMS, useLedgerCanvas } from "../utils/ledgerScene";
 
 const STYLES = `
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Figtree:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap');
-
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-:root {
-  --bg: #0f0e0c;
-  --sand-50: #faf8f4;
-  --sand-100: #f2ebe0;
-  --sand-200: #e2d5c3;
-  --sand-300: #c9b89e;
-  --sand-400: #a8906f;
-  --sand-500: #8a7252;
-  --sage: #7a9e87;
-  --sage-l: #b3cfbb;
-  --sage-d: #4f7a61;
-  --amber: #c9973a;
-  --amber-l: #e8c97a;
-  --rose: #b87070;
-  --ink: #1a1714;
-  --glass-bg: rgba(15,14,12,0.55);
-  --glass-border: rgba(255,255,255,0.08);
-}
-
-html, body, #root {
-  height: 100%;
-  font-family: 'Figtree', sans-serif;
-  background: var(--bg);
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-}
+${LEDGER_THEME_CSS}
 
 .bg-canvas { position: fixed; inset: 0; z-index: 0; }
 
@@ -42,9 +15,9 @@ html, body, #root {
   inset: 0;
   z-index: 1;
   background:
-    radial-gradient(ellipse 60% 50% at 15% 20%, rgba(122,158,135,0.13) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 60% at 85% 80%, rgba(201,151,58,0.10) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 40% at 50% 50%, rgba(184,112,112,0.07) 0%, transparent 70%);
+    radial-gradient(ellipse 60% 50% at 15% 20%, var(--mesh-1) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 85% 80%, var(--mesh-2) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 40% at 50% 50%, var(--mesh-3) 0%, transparent 70%);
   pointer-events: none;
   animation: meshDrift 20s ease-in-out infinite alternate;
 }
@@ -58,7 +31,7 @@ html, body, #root {
   position: fixed;
   inset: 0;
   z-index: 2;
-  opacity: 0.035;
+  opacity: var(--noise-opacity);
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 256px;
   pointer-events: none;
@@ -87,10 +60,10 @@ html, body, #root {
   backdrop-filter: blur(28px) saturate(140%);
   -webkit-backdrop-filter: blur(28px) saturate(140%);
   box-shadow:
-    0 0 0 1px rgba(255,255,255,0.04) inset,
-    0 2px 0 rgba(255,255,255,0.06) inset,
-    0 40px 80px rgba(0,0,0,0.6),
-    0 0 120px rgba(122,158,135,0.06);
+    0 0 0 1px var(--surface-soft-2) inset,
+    0 2px 0 var(--surface-border) inset,
+    var(--card-shadow),
+    var(--card-glow);
   margin: 0 auto;
   opacity: 0;
   transform: translateY(28px) scale(0.97);
@@ -104,7 +77,7 @@ html, body, #root {
   left: 20%;
   right: 20%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+  background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
   border-radius: 50%;
 }
 
@@ -171,20 +144,20 @@ html, body, #root {
   margin-bottom: 30px;
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid var(--surface-border);
   opacity: 0;
   animation: riseIn 0.6s 0.64s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .stat-cell {
   flex: 1;
-  background: rgba(255,255,255,0.03);
+  background: var(--surface-soft);
   padding: 10px 14px;
   transition: background 0.2s;
 }
 
-.stat-cell:hover { background: rgba(255,255,255,0.06); }
-.stat-cell + .stat-cell { border-left: 1px solid rgba(255,255,255,0.05); }
+.stat-cell:hover { background: var(--surface-soft-3); }
+.stat-cell + .stat-cell { border-left: 1px solid var(--surface-border-2); }
 
 .stat-val {
   font-family: 'DM Mono', monospace;
@@ -251,8 +224,8 @@ html, body, #root {
 
 .inp {
   width: 100%;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.09);
+  background: var(--surface-soft-2);
+  border: 1px solid var(--surface-strong);
   border-radius: 11px;
   padding: 12px 15px;
   font-family: 'Figtree', sans-serif;
@@ -263,17 +236,17 @@ html, body, #root {
   -webkit-appearance: none;
 }
 
-.inp::placeholder { color: rgba(168,144,111,0.45); }
+.inp::placeholder { color: var(--input-placeholder); }
 
 .inp:focus {
-  border-color: rgba(122,158,135,0.55);
-  background: rgba(122,158,135,0.05);
-  box-shadow: 0 0 0 3px rgba(122,158,135,0.1), 0 1px 0 rgba(255,255,255,0.04) inset;
+  border-color: var(--sage);
+  background: var(--focus-fill);
+  box-shadow: 0 0 0 3px var(--focus-ring), 0 1px 0 var(--surface-soft-2) inset;
 }
 
 .inp.err {
-  border-color: rgba(184,112,112,0.55);
-  box-shadow: 0 0 0 3px rgba(184,112,112,0.1);
+  border-color: var(--rose);
+  box-shadow: 0 0 0 3px var(--error-ring);
   animation: shake 0.35s ease;
 }
 
@@ -341,9 +314,9 @@ html, body, #root {
 .chk-box {
   width: 15px;
   height: 15px;
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid var(--surface-stronger);
   border-radius: 4px;
-  background: rgba(255,255,255,0.03);
+  background: var(--surface-soft);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -383,7 +356,7 @@ html, body, #root {
   letter-spacing: 0.04em;
   color: var(--ink);
   background: linear-gradient(135deg, var(--sage-l) 0%, var(--amber-l) 100%);
-  box-shadow: 0 4px 24px rgba(122,158,135,0.3), 0 1px 0 rgba(255,255,255,0.3) inset;
+  box-shadow: var(--btn-shadow);
   transition: transform 0.15s, box-shadow 0.2s, filter 0.2s;
 }
 
@@ -391,7 +364,7 @@ html, body, #root {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, var(--glass-highlight) 50%, transparent 100%);
   background-size: 200% auto;
   opacity: 0;
   transition: opacity 0.3s;
@@ -404,7 +377,7 @@ html, body, #root {
 
 .btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(122,158,135,0.4), 0 1px 0 rgba(255,255,255,0.3) inset;
+  box-shadow: var(--btn-shadow-hover);
   filter: brightness(1.05);
 }
 
@@ -483,15 +456,15 @@ html, body, #root {
   bottom: 28px;
   left: 50%;
   transform: translateX(-50%) translateY(80px);
-  background: rgba(15,14,12,0.92);
-  border: 1px solid rgba(122,158,135,0.3);
+  background: var(--toast-bg);
+  border: 1px solid var(--toast-border);
   color: var(--sand-100);
   padding: 12px 22px;
   border-radius: 12px;
   font-size: 13.5px;
   font-weight: 500;
   backdrop-filter: blur(16px);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  box-shadow: var(--toast-shadow);
   transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s;
   opacity: 0;
   z-index: 999;
@@ -531,8 +504,8 @@ html, body, #root {
   overflow: hidden;
   display: flex;
   align-items: center;
-  border-top: 1px solid rgba(255,255,255,0.04);
-  background: rgba(15,14,12,0.6);
+  border-top: 1px solid var(--ticker-border);
+  background: var(--ticker-bg);
   backdrop-filter: blur(8px);
 }
 
@@ -557,7 +530,7 @@ html, body, #root {
   font-size: 11px;
   font-weight: 300;
   color: var(--sand-500);
-  border-right: 1px solid rgba(255,255,255,0.05);
+  border-right: 1px solid var(--surface-border-2);
 }
 
 .ticker-item .up { color: var(--sage-l); }
@@ -597,7 +570,11 @@ function validate(email, password) {
 export default function LoginPage() {
   const canvasRef = useRef(null);
   const toastTimeoutRef = useRef(null);
-  useLedgerCanvas(canvasRef);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
+  const { theme } = useTheme();
+  useLedgerCanvas(canvasRef, theme);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -609,6 +586,7 @@ export default function LoginPage() {
   const [progress, setProgress] = useState(0);
   const [toastVisible, setToastVisible] = useState(false);
   const [sparksReady, setSparksReady] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     const sparkTimer = setTimeout(() => setSparksReady(true), 1000);
@@ -624,6 +602,7 @@ export default function LoginPage() {
   const handleSubmit = async () => {
     const nextErrors = validate(email, password);
     setErrors(nextErrors);
+    setSubmitError("");
     if (Object.keys(nextErrors).length > 0) {
       return;
     }
@@ -634,22 +613,34 @@ export default function LoginPage() {
     const progressOne = setTimeout(() => setProgress(55), 80);
     const progressTwo = setTimeout(() => setProgress(88), 750);
 
-    await new Promise((resolve) => setTimeout(resolve, 1700));
+    try {
+      await login({
+        email: email.trim(),
+        password,
+        remember,
+      });
 
-    setProgress(100);
-    await new Promise((resolve) => setTimeout(resolve, 180));
+      setProgress(100);
+      await new Promise((resolve) => setTimeout(resolve, 180));
 
-    clearTimeout(progressOne);
-    clearTimeout(progressTwo);
+      setToastVisible(true);
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+      toastTimeoutRef.current = setTimeout(() => setToastVisible(false), 3500);
 
-    setLoading(false);
-    setProgress(0);
-    setToastVisible(true);
-
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current);
+      const nextPath = location.state?.from?.pathname || "/dashboard";
+      window.setTimeout(() => {
+        navigate(nextPath, { replace: true });
+      }, 300);
+    } catch (error) {
+      setSubmitError(error.message || "Unable to sign in right now.");
+      setProgress(0);
+    } finally {
+      clearTimeout(progressOne);
+      clearTimeout(progressTwo);
+      setLoading(false);
     }
-    toastTimeoutRef.current = setTimeout(() => setToastVisible(false), 3500);
   };
 
   return (
@@ -679,13 +670,13 @@ export default function LoginPage() {
 
           <div className="stats-row">
             {STATS.map((stat, statIndex) => (
-              <div className="stat-cell" key={stat.label}>
+              <div className="stat-cell" key={`${stat.lbl}-${statIndex}`}>
                 <div className={`stat-val ${stat.cls}`}>{stat.val}</div>
                 <div className="stat-lbl">{stat.lbl}</div>
                 <div className="sparkline">
                   {stat.sparks.map((height, barIndex) => (
                     <div
-                      key={`${stat.label}-${barIndex}`}
+                      key={`${stat.lbl}-${barIndex}`}
                       className="spark-bar"
                       style={{
                         height: `${height * 100}%`,
@@ -704,6 +695,13 @@ export default function LoginPage() {
               </div>
             ))}
           </div>
+
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleSubmit();
+            }}
+          >
 
           <div className={`field${focus.email ? " foc" : ""}`}>
             <div className="field-lbl">
@@ -784,14 +782,17 @@ export default function LoginPage() {
           </div>
 
           <div className="btn-wrap">
-            <button className="btn" type="button" onClick={handleSubmit} disabled={loading}>
+            <button className="btn" type="submit" disabled={loading}>
               {loading && <div className="btn-progress" style={{ width: `${progress}%` }} />}
               <div className="btn-inner">
                 {loading && <div className="spin" />}
                 {loading ? "Authenticating..." : "Sign In to Ledger"}
               </div>
             </button>
+            {submitError && <div className="err-text" style={{ marginTop: 10 }}>{submitError}</div>}
           </div>
+
+          </form>
 
           <div className="card-footer">
             No account yet?
