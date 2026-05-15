@@ -142,6 +142,22 @@ export async function createTransaction(payload) {
   }
 }
 
+export async function scanBillPhoto(file) {
+  if (FRONTEND_ONLY_MODE) {
+    throw new Error("Bill scanning needs the live backend.");
+  }
+
+  const formData = new FormData();
+  formData.append("image", file);
+
+  try {
+    const response = await api.post("/transactions/scan-bill/", formData);
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, "Unable to scan this bill photo."));
+  }
+}
+
 export async function updateTransaction(id, payload) {
   if (FRONTEND_ONLY_MODE) {
     const categories = getMockCategories();

@@ -1,9 +1,11 @@
 from django.db.models import Q
 from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from .models import Category, Transaction
+from .ocr import BillOcrError, extract_expense_from_bill
 from .serializers import CategorySerializer, TransactionSerializer
 
 
@@ -92,3 +94,32 @@ class TransactionViewSet(viewsets.ModelViewSet):
         if instance.user_id != self.request.user.id:
             raise PermissionDenied("You cannot delete another user's transaction.")
         instance.delete()
+
+    @action(detail=False, methods=["post"], url_path="scan-bill")
+    def scan_bill(self, request):
+        image = request.FILES.get("image")
+        if image is None:
+            return Response({"detail": "Please upload a bill photo."}, status=status.HTTP_400_BAD_REQUEST)
+
+        categories = Category.objects.filter(
+            Q(user=request.user) | Q(user__isnull=True),
+            type="expense",
+        ).order_by("name")
+
+        try:
+            draft = extract_expense_from_bill(image, list(categories))
+        except BillOcrError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                "type": "expense",
+                "amount": f"{draft.amount:.2f}" if draft.amount is not None else "",
+                "category": draft.category_id,
+                "category_name": draft.category_name,
+                "title": draft.title,
+                "note": draft.note,
+                "date": draft.date,
+                "raw_text": draft.raw_text,
+            }
+        )
