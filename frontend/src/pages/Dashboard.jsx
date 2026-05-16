@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatedCounter, ProgressRing } from "../components/SharedComponents";
 import { useAuth } from "../context/AuthContext";
-import { downloadReport, fetchDashboardReport } from "../services/reports";
+import { fetchDashboardReport } from "../services/reports";
+import { getBudgetBalance } from "../utils/budgetDisplay";
 
 const STYLES = `
 .panel-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
@@ -71,6 +72,7 @@ export default function Dashboard() {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
+  const budgetBalance = payload?.budget ? getBudgetBalance(payload.budget.remaining_amount) : null;
 
   useEffect(() => {
     let mounted = true;
@@ -103,9 +105,6 @@ export default function Dashboard() {
     return Math.max(1, ...items.map((item) => Math.max(item.income, item.expense)));
   }, [payload]);
 
-  const currentMonthParam = new Date().toISOString().slice(0, 7);
-  const currentMonthLabel = payload?.current_month?.month || new Date().toLocaleDateString("en-IN", { month: "long", year: "numeric" });
-
   return (
     <>
       <style>{STYLES}</style>
@@ -118,7 +117,7 @@ export default function Dashboard() {
         <div className="actions">
           <button className="btn primary" type="button" onClick={() => navigate("/transactions?compose=income")}>Add Income</button>
           <button className="btn primary" type="button" onClick={() => navigate("/transactions?compose=expense")}>Add Expense</button>
-          <button className="btn" type="button" onClick={() => downloadReport("csv", { month: currentMonthParam })}>Export CSV</button>
+          <button className="btn" type="button" onClick={() => navigate("/insights")}>Download Report</button>
         </div>
       </div>
 
@@ -178,7 +177,7 @@ export default function Dashboard() {
                   <div className="budget-copy">
                     <span className={`status-chip ${payload.budget.status}`}>{payload.budget.status.replace("_", " ")}</span>
                     <div className="list-title">{formatCurrency(payload.budget.spent_amount)} spent of {formatCurrency(payload.budget.limit_amount)}</div>
-                    <div className="list-meta">{formatCurrency(payload.budget.remaining_amount)} remaining for {payload.current_month.month}</div>
+                    <div className="list-meta">{formatCurrency(budgetBalance.amount)} {budgetBalance.sentence} for {payload.current_month.month}</div>
                   </div>
                 </div>
               ) : (

@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.utils import timezone
 
 from .models import Category, Transaction
 
@@ -35,6 +36,11 @@ class TransactionSerializer(serializers.ModelSerializer):
     def validate_amount(self, value):
         if value <= 0:
             raise serializers.ValidationError("Amount must be positive.")
+        return value
+
+    def validate_date(self, value):
+        if value > timezone.localdate():
+            raise serializers.ValidationError("Transaction dates cannot be in the future.")
         return value
 
     def validate(self, attrs):

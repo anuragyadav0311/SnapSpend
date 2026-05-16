@@ -1,13 +1,17 @@
 from calendar import monthrange
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 import io
+from xml.sax.saxutils import escape
 
 from django.db.models import Q, Sum
 from django.utils import timezone
 from openpyxl import Workbook
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from apps.budgets.models import Budget
 from apps.transactions.models import Transaction
@@ -23,6 +27,19 @@ def next_month_for(value):
     return value.replace(month=value.month + 1, day=1)
 
 
+def add_months(value, months):
+    month_index = value.year * 12 + value.month - 1 + months
+    return date(month_index // 12, month_index % 12 + 1, 1)
+
+
+def quarter_start_for(value):
+    return value.replace(month=((value.month - 1) // 3) * 3 + 1, day=1)
+
+
+def year_start_for(value):
+    return value.replace(month=1, day=1)
+
+
 def parse_month_param(raw_value):
     if not raw_value:
         return month_start_for(timezone.localdate())
@@ -32,24 +49,124 @@ def parse_month_param(raw_value):
     return month_start_for(date.fromisoformat(raw_value))
 
 
+def parse_date_param(raw_value):
+    return date.fromisoformat(raw_value) if raw_value else None
+
+
+def parse_reference_date(raw_value):
+    if not raw_value:
+        return timezone.localdate()
+    if len(raw_value) == 7:
+        return parse_month_param(raw_value)
+    return date.fromisoformat(raw_value)
+
+
+def format_report_date(value):
+    return value.strftime("%d-%m-%Y")
+
+
 def format_money(value):
     numeric = value or Decimal("0")
     return round(float(numeric), 2)
 
 
+def format_money_display(value):
+    numeric = Decimal(value or "0")
+    return f"Rs. {numeric:,.2f}"
+
+
+def period_label(period):
+    return {
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "monthly": "Monthly",
+        "quarterly": "Quarterly",
+        "yearly": "Yearly",
+        "custom": "Custom",
+    }.get(period, "Transactions")
+
+
+def resolve_export_window(params):
+    today = timezone.localdate()
+    month = params.get("month")
+    start_date = parse_date_param(params.get("start_date"))
+    end_date = parse_date_param(params.get("end_date"))
+    period = (params.get("period") or "").strip().lower()
+    reference_date = parse_reference_date(params.get("reference_date") or params.get("month"))
+
+    if start_date or end_date:
+        return start_date, end_date or today, period or "custom"
+    if month:
+        month_start = parse_month_param(month)
+        month_end = min(next_month_for(month_start) - timedelta(days=1), today)
+        return month_start, month_end, "monthly"
+    if period in {"daily", "weekly", "monthly", "quarterly", "yearly"}:
+        period_start, period_end = resolve_period_range(period, reference_date)
+        return period_start, period_end, period
+    return None, today, "custom"
+
+
+def build_report_title(period):
+    label = period_label(period)
+    return f"{label} Transactions Report" if label != "Transactions" else "Transactions Report"
+
+
+def build_report_filename(period, start_date, end_date):
+    period_slug = period or "custom"
+    if start_date and end_date:
+        return f"transactions-{period_slug}-{start_date.isoformat()}-to-{end_date.isoformat()}"
+    if end_date:
+        return f"transactions-{period_slug}-through-{end_date.isoformat()}"
+    return f"transactions-{period_slug}-report"
+
+
+def build_filters_summary(period, start_date, end_date, tx_type):
+    type_label = {"income": "Income only", "expense": "Expense only"}.get(tx_type, "All transactions")
+    period_text = period_label(period)
+    if start_date and end_date:
+        return f"{period_text} range: {format_report_date(start_date)} to {format_report_date(end_date)} | {type_label}"
+    if end_date:
+        return f"{period_text} range: Beginning to {format_report_date(end_date)} | {type_label}"
+    return f"{period_text} transactions | {type_label}"
+
+
+def resolve_period_range(period, reference):
+    today = timezone.localdate()
+
+    if period == "daily":
+        return reference, reference
+    if period == "weekly":
+        start_date = reference - timedelta(days=reference.weekday())
+        return start_date, min(start_date + timedelta(days=6), today)
+    if period == "monthly":
+        start_date = month_start_for(reference)
+        return start_date, min(next_month_for(start_date) - timedelta(days=1), today)
+    if period == "quarterly":
+        start_date = quarter_start_for(reference)
+        return start_date, min(add_months(start_date, 3) - timedelta(days=1), today)
+    if period == "yearly":
+        start_date = year_start_for(reference)
+        return start_date, min(date(reference.year, 12, 31), today)
+    return None, None
+
+
 def apply_transaction_filters(queryset, params):
     tx_type = params.get("type")
     category_id = params.get("category")
-    start_date = params.get("start_date")
-    end_date = params.get("end_date")
+    start_date = parse_date_param(params.get("start_date"))
+    end_date = parse_date_param(params.get("end_date"))
     search = params.get("search")
     month = params.get("month")
+    period = (params.get("period") or "").strip().lower()
+    reference_date = parse_reference_date(params.get("reference_date") or params.get("month"))
 
     if tx_type in {"income", "expense"}:
         queryset = queryset.filter(type=tx_type)
     if category_id:
         queryset = queryset.filter(category_id=category_id)
-    if month:
+    if period in {"daily", "weekly", "monthly", "quarterly", "yearly"} and not start_date and not end_date:
+        start_date, end_date = resolve_period_range(period, reference_date)
+    elif month:
         month_start = parse_month_param(month)
         queryset = queryset.filter(date__gte=month_start, date__lt=next_month_for(month_start))
     if start_date:
@@ -75,9 +192,39 @@ def serialize_transaction(transaction):
         "title": transaction.title,
         "note": transaction.note,
         "date": transaction.date.isoformat(),
+        "display_date": format_report_date(transaction.date),
         "created_at": transaction.created_at.isoformat(),
         "updated_at": transaction.updated_at.isoformat(),
     }
+
+
+def transaction_delta(transaction):
+    return transaction.amount if transaction.type == "income" else -transaction.amount
+
+
+def opening_balance_before(user, transaction):
+    earlier_transactions = Transaction.objects.filter(user=user).filter(
+        Q(date__lt=transaction.date)
+        | Q(date=transaction.date, created_at__lt=transaction.created_at)
+        | Q(date=transaction.date, created_at=transaction.created_at, id__lt=transaction.id)
+    )
+    return aggregate_total(earlier_transactions, "income") - aggregate_total(earlier_transactions, "expense")
+
+
+def build_transaction_report_rows(user, transactions):
+    if not transactions:
+        return []
+
+    running_balance = opening_balance_before(user, transactions[0])
+    rows = []
+
+    for transaction in transactions:
+        running_balance += transaction_delta(transaction)
+        row = serialize_transaction(transaction)
+        row["available_balance"] = str(running_balance)
+        rows.append(row)
+
+    return rows
 
 
 def aggregate_total(queryset, tx_type):
@@ -191,7 +338,7 @@ def build_monthly_report_payload(user, month):
     transactions = (
         Transaction.objects.filter(user=user, date__gte=month, date__lt=next_month)
         .select_related("category")
-        .order_by("-date", "-created_at")
+        .order_by("date", "created_at", "id")
     )
     income_total = aggregate_total(transactions, "income")
     expense_total = aggregate_total(transactions, "expense")
@@ -206,7 +353,7 @@ def build_monthly_report_payload(user, month):
             "balance": format_money(income_total - expense_total),
         },
         "budget": budget_snapshot_for(user, month),
-        "transactions": [serialize_transaction(transaction) for transaction in transactions],
+        "transactions": build_transaction_report_rows(user, list(transactions)),
     }
 
 
@@ -235,15 +382,16 @@ def build_category_summary_payload(user, month):
 
 
 def build_csv_response_rows(transactions):
-    rows = [["Date", "Type", "Category", "Title", "Note", "Amount"]]
+    rows = [["Date", "Type", "Category", "Title", "Note", "Amount", "Available Balance"]]
     rows.extend(
         [
-            transaction.date.isoformat(),
-            transaction.type,
-            transaction.category.name if transaction.category else "Uncategorized",
-            transaction.title,
-            transaction.note,
-            str(transaction.amount),
+            transaction["display_date"],
+            transaction["type"].title(),
+            transaction["category_name"],
+            transaction["title"],
+            transaction["note"],
+            transaction["amount"],
+            transaction["available_balance"],
         ]
         for transaction in transactions
     )
@@ -253,30 +401,96 @@ def build_csv_response_rows(transactions):
 def build_workbook(transactions, title, filters_summary, totals):
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = "Transactions Report"
-    sheet.append([title])
-    sheet.append([filters_summary])
-    sheet.append(
-        [
-            f"Income: {format_money(totals['income'])}",
-            f"Expense: {format_money(totals['expense'])}",
-            f"Balance: {format_money(totals['income'] - totals['expense'])}",
-        ]
+    sheet.title = "Report"
+
+    accent_fill = PatternFill("solid", fgColor="D9EAD3")
+    soft_fill = PatternFill("solid", fgColor="F6EFE4")
+    header_fill = PatternFill("solid", fgColor="1F1B16")
+    border = Border(
+        left=Side(style="thin", color="D7C9B1"),
+        right=Side(style="thin", color="D7C9B1"),
+        top=Side(style="thin", color="D7C9B1"),
+        bottom=Side(style="thin", color="D7C9B1"),
     )
+
+    sheet.merge_cells("A1:G1")
+    sheet["A1"] = title
+    sheet["A1"].font = Font(name="Calibri", size=16, bold=True, color="231A12")
+    sheet["A1"].alignment = Alignment(horizontal="center")
+
+    sheet.merge_cells("A2:G2")
+    sheet["A2"] = filters_summary
+    sheet["A2"].font = Font(name="Calibri", size=11, italic=True, color="5A4633")
+    sheet["A2"].alignment = Alignment(horizontal="center")
+
+    sheet["A4"] = "Income"
+    sheet["B4"] = "Expense"
+    sheet["C4"] = "Net Balance"
+    sheet["A5"] = float(totals["income"])
+    sheet["B5"] = float(totals["expense"])
+    sheet["C5"] = float(totals["income"] - totals["expense"])
+
+    for cell_ref in ("A4", "B4", "C4"):
+        sheet[cell_ref].font = Font(bold=True, color="231A12")
+        sheet[cell_ref].fill = accent_fill
+        sheet[cell_ref].alignment = Alignment(horizontal="center")
+        sheet[cell_ref].border = border
+
+    for cell_ref in ("A5", "B5", "C5"):
+        sheet[cell_ref].number_format = '#,##0.00'
+        sheet[cell_ref].alignment = Alignment(horizontal="center")
+        sheet[cell_ref].border = border
+
+    header_row_index = 7
     sheet.append([])
-    sheet.append(["Date", "Type", "Category", "Title", "Note", "Amount"])
+    sheet.append(["Date", "Type", "Category", "Title", "Note", "Amount", "Available Balance"])
 
     for transaction in transactions:
         sheet.append(
             [
-                transaction.date.isoformat(),
-                transaction.type,
-                transaction.category.name if transaction.category else "Uncategorized",
-                transaction.title,
-                transaction.note,
-                float(transaction.amount),
+                transaction["display_date"],
+                transaction["type"].title(),
+                transaction["category_name"],
+                transaction["title"],
+                transaction["note"],
+                float(transaction["amount"]),
+                float(transaction["available_balance"]),
             ]
         )
+
+    for cell in sheet[header_row_index]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+
+    for row_index in range(header_row_index + 1, sheet.max_row + 1):
+        row_fill = soft_fill if (row_index - header_row_index) % 2 == 0 else None
+        for cell in sheet[row_index]:
+            cell.border = border
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+            if row_fill:
+                cell.fill = row_fill
+
+        sheet[f"F{row_index}"].number_format = '#,##0.00'
+        sheet[f"G{row_index}"].number_format = '#,##0.00'
+        sheet[f"A{row_index}"].alignment = Alignment(horizontal="center")
+        sheet[f"B{row_index}"].alignment = Alignment(horizontal="center")
+        sheet[f"F{row_index}"].alignment = Alignment(horizontal="right")
+        sheet[f"G{row_index}"].alignment = Alignment(horizontal="right")
+
+    sheet.freeze_panes = "A8"
+    sheet.auto_filter.ref = f"A7:G{sheet.max_row}"
+    sheet.sheet_view.showGridLines = False
+    sheet.column_dimensions["A"].width = 14
+    sheet.column_dimensions["B"].width = 12
+    sheet.column_dimensions["C"].width = 20
+    sheet.column_dimensions["D"].width = 26
+    sheet.column_dimensions["E"].width = 32
+    sheet.column_dimensions["F"].width = 14
+    sheet.column_dimensions["G"].width = 20
+    sheet.row_dimensions[1].height = 26
+    sheet.row_dimensions[2].height = 20
 
     output = io.BytesIO()
     workbook.save(output)
@@ -286,51 +500,114 @@ def build_workbook(transactions, title, filters_summary, totals):
 
 def build_pdf_bytes(user, transactions, title, filters_summary, totals):
     output = io.BytesIO()
-    pdf = canvas.Canvas(output, pagesize=A4)
-    width, height = A4
-    y = height - 50
-
-    def ensure_space(current_y, required=40):
-        if current_y < required:
-            pdf.showPage()
-            return height - 50
-        return current_y
-
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(40, y, title)
-    y -= 20
-    pdf.setFont("Helvetica", 10)
-    pdf.drawString(40, y, f"User: {user.email}")
-    y -= 14
-    pdf.drawString(40, y, filters_summary)
-    y -= 14
-    pdf.drawString(
-        40,
-        y,
-        f"Income: {format_money(totals['income'])}  Expense: {format_money(totals['expense'])}  Balance: {format_money(totals['income'] - totals['expense'])}",
+    doc = SimpleDocTemplate(
+        output,
+        pagesize=landscape(A4),
+        leftMargin=28,
+        rightMargin=28,
+        topMargin=28,
+        bottomMargin=24,
     )
-    y -= 24
+    styles = getSampleStyleSheet()
+    story = []
 
-    pdf.setFont("Helvetica-Bold", 10)
-    pdf.drawString(40, y, "Date")
-    pdf.drawString(110, y, "Type")
-    pdf.drawString(170, y, "Category")
-    pdf.drawString(290, y, "Title")
-    pdf.drawRightString(width - 40, y, "Amount")
-    y -= 16
-    pdf.setFont("Helvetica", 9)
+    title_style = styles["Title"]
+    title_style.fontSize = 18
+    title_style.leading = 22
+    title_style.textColor = colors.HexColor("#231A12")
+
+    meta_style = styles["BodyText"]
+    meta_style.fontSize = 9
+    meta_style.leading = 12
+    meta_style.textColor = colors.HexColor("#5A4633")
+
+    story.append(Paragraph(escape(title), title_style))
+    story.append(Spacer(1, 8))
+    story.append(Paragraph(f"User: {escape(user.email)}", meta_style))
+    story.append(Paragraph(escape(filters_summary), meta_style))
+    story.append(Paragraph(f"Generated on {timezone.localtime().strftime('%d-%m-%Y %I:%M %p')}", meta_style))
+    story.append(Spacer(1, 12))
+
+    totals_table = Table(
+        [
+            ["Income", "Expense", "Net Balance"],
+            [
+                format_money_display(totals["income"]),
+                format_money_display(totals["expense"]),
+                format_money_display(totals["income"] - totals["expense"]),
+            ],
+        ],
+        colWidths=[150, 150, 170],
+    )
+    totals_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#D9EAD3")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#231A12")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, 1), (-1, 1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#D7C9B1")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D7C9B1")),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    story.append(totals_table)
+    story.append(Spacer(1, 12))
+
+    table_rows = [[
+        "Date",
+        "Type",
+        "Category",
+        "Title",
+        "Note",
+        "Amount",
+        "Available Balance",
+    ]]
 
     for transaction in transactions:
-        y = ensure_space(y)
-        pdf.drawString(40, y, transaction.date.isoformat())
-        pdf.drawString(110, y, transaction.type)
-        pdf.drawString(170, y, (transaction.category.name if transaction.category else "Uncategorized")[:20])
-        pdf.drawString(290, y, transaction.title[:28])
-        pdf.drawRightString(width - 40, y, str(transaction.amount))
-        y -= 14
+        table_rows.append(
+            [
+                transaction["display_date"],
+                transaction["type"].title(),
+                Paragraph(escape(transaction["category_name"]), meta_style),
+                Paragraph(escape(transaction["title"]), meta_style),
+                Paragraph(escape(transaction["note"] or "-"), meta_style),
+                format_money_display(transaction["amount"]),
+                format_money_display(transaction["available_balance"]),
+            ]
+        )
 
-    pdf.setFont("Helvetica-Oblique", 8)
-    pdf.drawString(40, 20, f"Generated at {timezone.now().isoformat()}")
-    pdf.save()
+    if len(table_rows) == 1:
+        table_rows.append(["-", "-", "-", "No transactions found for the selected range.", "-", "-", "-"])
+
+    transactions_table = Table(
+        table_rows,
+        colWidths=[68, 58, 118, 128, 165, 88, 98],
+        repeatRows=1,
+    )
+    transactions_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F1B16")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#D7C9B1")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("ALIGN", (0, 0), (1, -1), "CENTER"),
+                ("ALIGN", (5, 1), (6, -1), "RIGHT"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F6EFE4")]),
+            ]
+        )
+    )
+    story.append(transactions_table)
+
+    doc.build(story)
     output.seek(0)
     return output

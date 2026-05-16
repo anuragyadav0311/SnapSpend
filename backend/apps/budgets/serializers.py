@@ -2,6 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db.models import Sum
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.transactions.models import Transaction
@@ -38,7 +39,11 @@ class BudgetSerializer(serializers.ModelSerializer):
         ]
 
     def validate_month(self, value):
-        return value.replace(day=1)
+        normalized = value.replace(day=1)
+        current_month = timezone.localdate().replace(day=1)
+        if normalized < current_month:
+            raise serializers.ValidationError("Budgets can only be created for the current month or a future month.")
+        return normalized
 
     def validate_limit_amount(self, value):
         if value <= 0:

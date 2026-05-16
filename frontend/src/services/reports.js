@@ -17,6 +17,11 @@ function triggerBlobDownload(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+function filenameFromDisposition(headerValue) {
+  const match = headerValue?.match(/filename="?([^"]+)"?/i);
+  return match?.[1] || "";
+}
+
 export async function fetchDashboardReport() {
   if (FRONTEND_ONLY_MODE) {
     return {
@@ -91,7 +96,10 @@ export async function downloadReport(format, params = {}) {
       },
       responseType: "blob",
     });
-    triggerBlobDownload(response.data, filenameMap[format]);
+    triggerBlobDownload(
+      response.data,
+      filenameFromDisposition(response.headers["content-disposition"]) || filenameMap[format],
+    );
   } catch (error) {
     throw new Error(getApiErrorMessage(error, `Unable to export the ${format.toUpperCase()} report.`));
   }

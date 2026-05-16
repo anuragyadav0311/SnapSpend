@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProgressRing } from "../components/SharedComponents";
 import { createBudget, listBudgets, updateBudget } from "../services/budgets";
+import { getBudgetBalance } from "../utils/budgetDisplay";
+import { currentMonthValue } from "../utils/dateConstraints";
 
 const STYLES = `
 .budget-wrap { display: grid; gap: 18px; }
@@ -49,13 +51,9 @@ function formatCurrency(value) {
   return `Rs. ${Math.abs(Number(value || 0)).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
-function currentMonthValue() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
-
 export default function Budgets() {
-  const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
+  const currentMonth = currentMonthValue();
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [allBudgets, setAllBudgets] = useState([]);
   const [draftLimit, setDraftLimit] = useState("");
   const [loading, setLoading] = useState(true);
@@ -101,6 +99,7 @@ export default function Budgets() {
   }, [activeBudget, selectedMonth]);
 
   const progress = activeBudget ? Math.min(Number(activeBudget.progress_percent || 0), 100) : 0;
+  const budgetBalance = activeBudget ? getBudgetBalance(activeBudget.remaining_amount) : null;
 
   const handleSave = async () => {
     if (!draftLimit || Number(draftLimit) <= 0) {
@@ -147,7 +146,7 @@ export default function Budgets() {
             <div className="budget-card">
               <div className="label" style={{ marginBottom: 12 }}>Selected Month</div>
               <div className="field full">
-                <input className="input" type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
+                <input className="input" type="month" value={selectedMonth} min={currentMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
               </div>
 
               {activeBudget ? (
@@ -176,8 +175,8 @@ export default function Budgets() {
                       <div className="stat-value">{formatCurrency(activeBudget.spent_amount)}</div>
                     </div>
                     <div className="stat-card">
-                      <div className="stat-label">Remaining</div>
-                      <div className="stat-value">{formatCurrency(activeBudget.remaining_amount)}</div>
+                      <div className="stat-label">{budgetBalance.label}</div>
+                      <div className="stat-value">{formatCurrency(budgetBalance.amount)}</div>
                     </div>
                   </div>
                 </>
@@ -191,7 +190,7 @@ export default function Budgets() {
               <div className="form-grid">
                 <div className="field full">
                   <label className="label">Month</label>
-                  <input className="input" type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
+                  <input className="input" type="month" value={selectedMonth} min={currentMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
                 </div>
                 <div className="field full">
                   <label className="label">Monthly Limit</label>
