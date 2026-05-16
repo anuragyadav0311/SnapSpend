@@ -1,7 +1,10 @@
+from datetime import date
+
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from .models import Category, Transaction
@@ -43,6 +46,29 @@ class TransactionViewSet(viewsets.ModelViewSet):
     serializer_class = TransactionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def validate_date_filters(self, params):
+        today = timezone.localdate()
+        start_date = params.get("start_date")
+        end_date = params.get("end_date")
+
+        def parse_date(raw_value, field_name):
+            if not raw_value:
+                return None
+            try:
+                return date.fromisoformat(raw_value)
+            except ValueError as exc:
+                raise ValidationError({field_name: "Enter a valid date."}) from exc
+
+        parsed_start = parse_date(start_date, "start_date")
+        parsed_end = parse_date(end_date, "end_date")
+
+        if parsed_start and parsed_start > today:
+            raise ValidationError({"start_date": "Future dates are not allowed."})
+        if parsed_end and parsed_end > today:
+            raise ValidationError({"end_date": "Future dates are not allowed."})
+        if parsed_start and parsed_end and parsed_start > parsed_end:
+            raise ValidationError({"end_date": "The end date must be on or after the start date."})
+
     def get_queryset(self):
         queryset = Transaction.objects.filter(user=self.request.user).select_related("category")
         params = self.request.query_params
@@ -52,6 +78,8 @@ class TransactionViewSet(viewsets.ModelViewSet):
         end_date = params.get("end_date")
         search = params.get("search")
         ordering = params.get("ordering")
+
+        self.validate_date_filters(params)
 
         if tx_type in {"income", "expense"}:
             queryset = queryset.filter(type=tx_type)

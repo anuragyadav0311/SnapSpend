@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CategoryPill } from "../components/SharedComponents";
 import { FRONTEND_ONLY_MODE } from "../services/frontendMode";
+import { clampDateToToday, todayValue } from "../utils/dateConstraints";
 import {
   createCategory,
   createTransaction,
@@ -637,6 +638,25 @@ function formatSignedCurrency(value) {
   return `${value >= 0 ? "+" : "-"}${formatCurrency(value)}`;
 }
 
+function FilterDateInput({ value, placeholder, min, max, onChange }) {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <input
+      className="sort-select"
+      type={focused || value ? "date" : "text"}
+      value={value}
+      min={min}
+      max={max}
+      placeholder={placeholder}
+      aria-label={placeholder}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      onChange={onChange}
+    />
+  );
+}
+
 function formatDateLabel(dateStr) {
   const date = new Date(`${dateStr}T00:00:00`);
   const today = new Date();
@@ -691,11 +711,12 @@ function iconLabelFor(type, category) {
 
 function createDraft(type, categories) {
   const fallbackCategory = categories.find((category) => category.type === type)?.id || "";
+  const today = todayValue();
 
   return {
     title: "",
     amount: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: today,
     note: "",
     categoryId: fallbackCategory,
     customCategory: "",
@@ -721,6 +742,7 @@ function composerSubtitle(composeType, editingId) {
 }
 
 export default function Transactions() {
+  const today = todayValue();
   const [searchParams, setSearchParams] = useSearchParams();
   const composeType = COMPOSE_TYPES.includes(searchParams.get("compose")) ? searchParams.get("compose") : "";
   const [transactions, setTransactions] = useState([]);
@@ -734,7 +756,7 @@ export default function Transactions() {
   const [draft, setDraft] = useState({
     title: "",
     amount: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: today,
     note: "",
     categoryId: "",
     customCategory: "",
@@ -796,6 +818,22 @@ export default function Transactions() {
     setComposeError("");
     setBillScanStatus("");
   }, [categories, composeType, editingId]);
+
+  const handleStartDateChange = (value) => {
+    const nextStartDate = clampDateToToday(value);
+    setStartDate(nextStartDate);
+    if (endDate && nextStartDate && nextStartDate > endDate) {
+      setEndDate(nextStartDate);
+    }
+  };
+
+  const handleEndDateChange = (value) => {
+    const nextEndDate = clampDateToToday(value);
+    setEndDate(nextEndDate);
+    if (startDate && nextEndDate && nextEndDate < startDate) {
+      setStartDate(nextEndDate);
+    }
+  };
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -964,6 +1002,11 @@ export default function Transactions() {
       return;
     }
 
+    if (draft.date > today) {
+      setComposeError("Transaction dates cannot be in the future.");
+      return;
+    }
+
     setSubmitting(true);
     setComposeError("");
 
@@ -1099,12 +1142,13 @@ export default function Transactions() {
 
             <div className="compose-field">
               <label className="compose-label">Date</label>
-              <input
-                className="compose-input"
-                type="date"
-                value={draft.date}
-                onChange={(event) => setDraft((current) => ({ ...current, date: event.target.value }))}
-              />
+                <input
+                  className="compose-input"
+                  type="date"
+                  value={draft.date}
+                  max={today}
+                  onChange={(event) => setDraft((current) => ({ ...current, date: clampDateToToday(event.target.value) }))}
+                />
             </div>
 
             <div className="compose-field">
@@ -1190,8 +1234,19 @@ export default function Transactions() {
           <option value="income">Type: Income</option>
           <option value="expense">Type: Expense</option>
         </select>
-        <input className="sort-select" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-        <input className="sort-select" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+        <FilterDateInput
+          value={startDate}
+          placeholder="Start date"
+          max={endDate || today}
+          onChange={(event) => handleStartDateChange(event.target.value)}
+        />
+        <FilterDateInput
+          value={endDate}
+          placeholder="End date"
+          min={startDate || undefined}
+          max={today}
+          onChange={(event) => handleEndDateChange(event.target.value)}
+        />
         <button
           className="sort-select"
           type="button"

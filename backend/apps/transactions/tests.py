@@ -1,9 +1,10 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -66,6 +67,28 @@ class TransactionApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("category", response.data)
+
+    def test_reject_future_transaction_date(self):
+        future_date = timezone.localdate() + timedelta(days=1)
+        response = self.client.post(
+            "/api/transactions/",
+            {
+                "type": "expense",
+                "amount": "499.00",
+                "category": self.default_expense.id,
+                "title": "Too early",
+                "date": future_date.isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("date", response.data)
+
+    def test_reject_invalid_future_filter_range(self):
+        future_date = timezone.localdate() + timedelta(days=1)
+        response = self.client.get(f"/api/transactions/?start_date={future_date.isoformat()}")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("start_date", response.data)
 
     def test_transaction_filters_support_search_type_and_ordering(self):
         Transaction.objects.create(
