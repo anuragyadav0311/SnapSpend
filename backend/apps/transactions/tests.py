@@ -178,3 +178,35 @@ class TransactionApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["detail"], "Please upload a bill photo.")
+
+    def test_anomalies_endpoint_flags_unusual_transaction(self):
+        for index in range(12):
+            Transaction.objects.create(
+                user=self.user,
+                type="expense",
+                amount=Decimal("450.00") + Decimal(index),
+                category=self.default_expense,
+                title=f"Regular grocery {index}",
+                date=date(2026, 5, min(index + 1, 28)),
+            )
+        unusual = Transaction.objects.create(
+            user=self.user,
+            type="expense",
+            amount=Decimal("25000.00"),
+            category=self.default_expense,
+            title="Unexpected appliance repair",
+            date=date(2026, 5, 15),
+        )
+
+        response = self.client.get("/api/transactions/anomalies/?contamination=0.15")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        anomaly_ids = {item["id"] for item in response.data["results"]}
+        self.assertIn(unusual.id, anomaly_ids)
+        self.assertEqual(response.data["total_checked"], 13)
+
+    def test_anomalies_endpoint_validates_contamination(self):
+        response = self.client.get("/api/transactions/anomalies/?contamination=0.75")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("contamination", response.data)

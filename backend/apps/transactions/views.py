@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from .models import Category, Transaction
 from .ocr import BillOcrError, extract_expense_from_bill
 from .serializers import CategorySerializer, TransactionSerializer
+from ml.anomaly_detector import detect_anomalies
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -149,5 +150,51 @@ class TransactionViewSet(viewsets.ModelViewSet):
                 "note": draft.note,
                 "date": draft.date,
                 "raw_text": draft.raw_text,
+            }
+        )
+
+    @action(detail=False, methods=["get"], url_path="anomalies")
+    def anomalies(self, request):
+        try:
+            contamination = float(request.query_params.get("contamination", "0.08"))
+        except ValueError:
+            raise ValidationError({"contamination": "Enter a valid number."})
+
+        if not 0 < contamination < 0.5:
+            raise ValidationError({"contamination": "Value must be greater than 0 and less than 0.5."})
+
+        transactions = list(self.get_queryset().order_by("date", "created_at"))
+        results = detect_anomalies(transactions, contamination=contamination)
+        result_map = {result.transaction_id: result for result in results}
+        anomalous_transactions = [
+            transaction
+            for transaction in transactions
+            if result_map[transaction.id].is_anomaly
+        ]
+        anomalous_transactions.sort(
+            key=lambda transaction: result_map[transaction.id].anomaly_score,
+            reverse=True,
+        )
+
+        limit = request.query_params.get("limit")
+        if limit:
+            try:
+                limit_value = int(limit)
+            except ValueError:
+                raise ValidationError({"limit": "Enter a valid integer."})
+            anomalous_transactions = anomalous_transactions[: max(limit_value, 0)]
+
+        return Response(
+            {
+                "count": len(anomalous_transactions),
+                "total_checked": len(transactions),
+                "results": [
+                    {
+                        **TransactionSerializer(transaction, context={"request": request}).data,
+                        "anomaly_score": result_map[transaction.id].anomaly_score,
+                        "anomaly_reason": result_map[transaction.id].reason,
+                    }
+                    for transaction in anomalous_transactions
+                ],
             }
         )
