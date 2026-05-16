@@ -133,6 +133,24 @@ class TransactionApiTests(APITestCase):
         self.assertEqual(draft.category_id, groceries.id)
         self.assertEqual(draft.title, "Fresh Mart Supermarket")
 
+    def test_parse_bill_text_handles_missing_decimal_ocr_noise(self):
+        groceries = Category.objects.create(name="Groceries", type="expense", user=None)
+        draft = parse_bill_text(
+            """
+            Fresh Mart Supermarket
+            Date 12/05/2026,
+            subtotal 119000
+            GST 5950
+            Grand Totals 124950
+            """,
+            [self.default_expense, groceries],
+        )
+
+        self.assertEqual(draft.amount, Decimal("1249.50"))
+        self.assertEqual(draft.date, "2026-05-12")
+        self.assertEqual(draft.category_id, groceries.id)
+        self.assertEqual(draft.title, "Fresh Mart Supermarket")
+
     @patch("apps.transactions.views.extract_expense_from_bill")
     def test_scan_bill_returns_ocr_draft(self, mock_extract):
         mock_extract.return_value = BillDraft(
