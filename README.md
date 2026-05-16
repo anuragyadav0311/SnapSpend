@@ -94,6 +94,12 @@ python manage.py runserver
 
 The backend runs at `http://localhost:8000`.
 
+Bill-photo scanning uses the system Tesseract OCR binary. Install it before using OCR locally:
+
+```bash
+sudo apt install tesseract-ocr
+```
+
 ### Frontend
 
 ```bash

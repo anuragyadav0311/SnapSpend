@@ -8,6 +8,7 @@ import {
   deleteTransaction,
   listCategories,
   listTransactions,
+  scanBillPhoto,
   updateTransaction,
 } from "../services/transactions";
 
@@ -199,6 +200,9 @@ const STYLES = `
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .compose-btn.primary {
@@ -221,6 +225,49 @@ const STYLES = `
 .compose-btn.ghost:hover {
   background: var(--surface-soft-2);
   color: var(--sand-100);
+}
+
+.compose-btn:disabled,
+.compose-btn.disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.bill-scan {
+  grid-column: 1 / -1;
+  border: 1px dashed var(--surface-strong);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--surface-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bill-scan-copy {
+  min-width: 180px;
+}
+
+.bill-scan-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sand-100);
+}
+
+.bill-scan-status {
+  font-size: 12px;
+  color: var(--sand-500);
+  margin-top: 3px;
+}
+
+.bill-scan-status.ready {
+  color: var(--sage-l);
+}
+
+.bill-scan-input {
+  display: none;
 }
 
 .filter-bar {
@@ -694,9 +741,11 @@ export default function Transactions() {
   });
   const [editingId, setEditingId] = useState(null);
   const [composeError, setComposeError] = useState("");
+  const [billScanStatus, setBillScanStatus] = useState("");
   const [pageError, setPageError] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [scanningBill, setScanningBill] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -745,6 +794,7 @@ export default function Transactions() {
     }
 
     setComposeError("");
+    setBillScanStatus("");
   }, [categories, composeType, editingId]);
 
   const filtered = useMemo(() => {
@@ -825,6 +875,7 @@ export default function Transactions() {
   const openComposer = (type) => {
     setEditingId(null);
     setDraft(createDraft(type, categories));
+    setBillScanStatus("");
     setSearchParams({ compose: type });
   };
 
@@ -862,6 +913,37 @@ export default function Transactions() {
 
     setCategories((current) => [...current, createdCategory]);
     return createdCategory.id;
+  };
+
+  const handleBillScan = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setScanningBill(true);
+    setComposeError("");
+    setBillScanStatus("Reading bill photo...");
+
+    try {
+      const result = await scanBillPhoto(file);
+      setDraft((current) => ({
+        ...current,
+        title: result.title || current.title,
+        amount: result.amount || current.amount,
+        date: result.date || current.date,
+        categoryId: result.category ? String(result.category) : current.categoryId,
+        note: result.note || current.note,
+      }));
+      setBillScanStatus("Bill scanned. Review the filled details before saving.");
+    } catch (error) {
+      setBillScanStatus("");
+      setComposeError(error.message || "Unable to scan this bill photo.");
+    } finally {
+      setScanningBill(false);
+    }
   };
 
   const saveCompose = async () => {
@@ -970,6 +1052,28 @@ export default function Transactions() {
           </div>
 
           <div className="compose-grid">
+            {composeType === "expense" && !editingId && (
+              <div className="bill-scan">
+                <div className="bill-scan-copy">
+                  <div className="bill-scan-title">Bill Photo</div>
+                  <div className={`bill-scan-status ${billScanStatus ? "ready" : ""}`}>
+                    {billScanStatus || "Use OCR to fill amount, date, category, and title."}
+                  </div>
+                </div>
+                <label className={`compose-btn ghost ${scanningBill ? "disabled" : ""}`}>
+                  {scanningBill ? "Scanning..." : "Scan Bill"}
+                  <input
+                    className="bill-scan-input"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    disabled={scanningBill}
+                    onChange={handleBillScan}
+                  />
+                </label>
+              </div>
+            )}
+
             <div className="compose-field full">
               <label className="compose-label">Title</label>
               <input

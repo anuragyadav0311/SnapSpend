@@ -1,10 +1,14 @@
 from datetime import date
+from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.transactions.models import Category, Transaction
+from apps.transactions.ocr import BillDraft, parse_bill_text
 
 
 User = get_user_model()
@@ -87,3 +91,49 @@ class TransactionApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["title"], "Groceries run")
+
+    def test_parse_bill_text_extracts_expense_draft(self):
+        groceries = Category.objects.create(name="Groceries", type="expense", user=None)
+        draft = parse_bill_text(
+            """
+            Fresh Mart Supermarket
+            Date: 12/05/2026
+            Subtotal 1190.00
+            GST 59.50
+            Grand Total Rs. 1,249.50
+            """,
+            [self.default_expense, groceries],
+        )
+
+        self.assertEqual(draft.amount, Decimal("1249.50"))
+        self.assertEqual(draft.date, "2026-05-12")
+        self.assertEqual(draft.category_id, groceries.id)
+        self.assertEqual(draft.title, "Fresh Mart Supermarket")
+
+    @patch("apps.transactions.views.extract_expense_from_bill")
+    def test_scan_bill_returns_ocr_draft(self, mock_extract):
+        mock_extract.return_value = BillDraft(
+            amount=Decimal("499.00"),
+            date="2026-05-12",
+            title="Coffee House",
+            category_id=self.default_expense.id,
+            category_name="Food & Dining",
+            note="Scanned from bill photo.",
+            raw_text="Coffee House\nTotal 499.00",
+        )
+        image = SimpleUploadedFile("bill.jpg", b"fake-image", content_type="image/jpeg")
+
+        response = self.client.post("/api/transactions/scan-bill/", {"image": image}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["type"], "expense")
+        self.assertEqual(response.data["amount"], "499.00")
+        self.assertEqual(response.data["category"], self.default_expense.id)
+        self.assertEqual(response.data["title"], "Coffee House")
+        mock_extract.assert_called_once()
+
+    def test_scan_bill_requires_image(self):
+        response = self.client.post("/api/transactions/scan-bill/", {}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["detail"], "Please upload a bill photo.")
