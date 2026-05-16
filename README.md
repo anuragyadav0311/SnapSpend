@@ -19,6 +19,7 @@ A full-stack personal finance tracker built with React, Django REST Framework, a
 - Filter by type, category, date range, and month
 - Search by title, note, or category name
 - Sort by newest, oldest, highest, and lowest amount
+- Scan bill photos with OCR to prefill expense drafts
 
 ### Budgets and Dashboard
 - Create monthly budgets
@@ -100,6 +101,13 @@ Bill-photo scanning uses the system Tesseract OCR binary. Install it before usin
 sudo apt install tesseract-ocr
 ```
 
+On Windows, install Tesseract OCR and make sure `tesseract.exe` is on `PATH`.
+One working location is:
+
+```text
+C:\Program Files\Tesseract-OCR\tesseract.exe
+```
+
 ### Frontend
 
 ```bash
@@ -128,6 +136,7 @@ The frontend runs at `http://localhost:5173`.
 - `DELETE /api/categories/{id}/`
 - `GET /api/transactions/`
 - `POST /api/transactions/`
+- `POST /api/transactions/scan-bill/`
 - `GET /api/transactions/{id}/`
 - `PUT /api/transactions/{id}/`
 - `DELETE /api/transactions/{id}/`

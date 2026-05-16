@@ -84,6 +84,15 @@ Make it executable:
 chmod +x backend/build.sh
 ```
 
+### 2.1.1 OCR Runtime Requirement
+
+Bill-photo scanning depends on the system Tesseract OCR binary, not just Python packages.
+
+- Ubuntu / Debian: `apt-get install -y tesseract-ocr`
+- Windows local development: install Tesseract OCR and add `C:\Program Files\Tesseract-OCR` to `PATH`
+
+If Tesseract is missing, the rest of the backend still works, but `POST /api/transactions/scan-bill/` will return an OCR-installation error instead of scanning the uploaded bill image.
+
 ### 2.2 Create Render Web Service
 
 1. Go to [render.com](https://render.com) → **New** → **Web Service**
@@ -120,6 +129,14 @@ chmod +x backend/build.sh
 ```bash
 curl https://expense-tracker-api.onrender.com/health/
 # Expected: {"status": "ok"}
+```
+
+For OCR-enabled environments, also verify that the scan route exists:
+
+```bash
+curl -X POST https://expense-tracker-api.onrender.com/api/transactions/scan-bill/
+# Expected without auth: {"detail":"Authentication credentials were not provided."}
+# Expected with auth but no file: {"detail":"Please upload a bill photo."}
 ```
 
 ---
@@ -192,6 +209,7 @@ python manage.py seed_categories
 4. Add a transaction
 5. Check the dashboard
 6. Export a CSV report
+7. If OCR is enabled on the host, upload a receipt through **Transactions -> Add Expense -> Scan Bill**
 
 ---
 

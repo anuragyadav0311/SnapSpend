@@ -118,6 +118,14 @@ Comprehensive testing checklist for the Expense Tracker application. Each sectio
 - [ ] Can sort by highest amount
 - [ ] Can sort by lowest amount
 
+### OCR Bill Scan
+- [ ] Expense composer shows a **Scan Bill** action
+- [ ] Uploading a clear receipt prefills amount, date, title, and category
+- [ ] User can still edit OCR-filled values before saving
+- [ ] Missing OCR runtime shows a readable error instead of crashing
+- [ ] Uploading no image returns a validation error
+- [ ] OCR flow is available only for expense creation, not income
+
 ---
 
 ## 4. Budgets
