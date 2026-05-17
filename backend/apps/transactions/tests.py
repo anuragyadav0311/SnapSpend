@@ -210,3 +210,47 @@ class TransactionApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("contamination", response.data)
+
+    def test_detect_anomalies_fallback(self):
+        # small synthetic dataset to trigger statistical fallback
+        from types import SimpleNamespace
+        from ml.anomaly_detector import detect_anomalies
+
+        txs = [SimpleNamespace(id=i, amount=amt, type="expense", category=SimpleNamespace(name="Groceries"), date=None) for i, amt in enumerate([10, 12, 11, 10000])]
+        results = detect_anomalies(txs, min_training_samples=2)
+        self.assertEqual(len(results), 4)
+        self.assertTrue(any(r.is_anomaly for r in results))
+
+    @patch("apps.transactions.views.extract_expense_from_bill")
+    def test_verification_flow_creates_verification_and_then_transaction(self, mock_extract):
+        # Post a clearly anomalous transaction
+        data = {
+            "type": "expense",
+            "amount": "9999999.00",
+            "category": self.default_expense.id,
+            "title": "Huge Grocery Purchase",
+            "note": "Test",
+            "date": "2024-01-01",
+        }
+
+        resp = self.client.post("/api/transactions/", data, format="json")
+        # Expect 202 Accepted with verification info
+        self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
+        token = resp.data["verification"]["token"]
+
+        # Mock OCR to return matching draft
+        mock_extract.return_value = BillDraft(
+            amount=Decimal("9999999.00"),
+            date="2024-01-01",
+            title="Huge Grocery Purchase",
+            category_id=self.default_expense.id,
+            category_name=self.default_expense.name,
+            note="Scanned from bill photo.",
+            raw_text="Huge Grocery Purchase\nTotal 9999999.00",
+        )
+
+        image = SimpleUploadedFile("bill.jpg", b"fake-image", content_type="image/jpeg")
+        verify_resp = self.client.post("/api/transactions/verify/", {"token": token, "image": image}, format="multipart")
+        # Should create transaction
+        self.assertIn(verify_resp.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
+        self.assertTrue(Transaction.objects.filter(title=data["title"]).exists())

@@ -136,9 +136,47 @@ export async function createTransaction(payload) {
 
   try {
     const response = await api.post("/transactions/", payload);
+    // ML anomaly detection: backend returns 202 when the transaction is flagged
+    if (response.status === 202) {
+      return {
+        _anomalyFlag: true,
+        detail: response.data.detail,
+        verification: response.data.verification,
+      };
+    }
     return response.data;
   } catch (error) {
     throw new Error(getApiErrorMessage(error, "Unable to create the transaction."));
+  }
+}
+
+export async function fetchAnomalies(params = {}) {
+  if (FRONTEND_ONLY_MODE) {
+    return { count: 0, total_checked: 0, results: [] };
+  }
+
+  try {
+    const response = await api.get("/transactions/anomalies/", { params });
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, "Unable to fetch anomaly data."));
+  }
+}
+
+export async function verifyTransaction(token, imageFile) {
+  if (FRONTEND_ONLY_MODE) {
+    throw new Error("Verification requires the live backend.");
+  }
+
+  const formData = new FormData();
+  formData.append("token", token);
+  formData.append("image", imageFile);
+
+  try {
+    const response = await api.post("/transactions/verify/", formData);
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, "Unable to verify the transaction."));
   }
 }
 

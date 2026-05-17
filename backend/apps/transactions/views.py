@@ -1,4 +1,6 @@
 from datetime import date
+from types import SimpleNamespace
+from uuid import uuid4
 
 from django.db.models import Q
 from django.utils import timezone
@@ -7,9 +9,9 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from .models import Category, Transaction
+from .models import Category, Transaction, TransactionVerification
 from .ocr import BillOcrError, extract_expense_from_bill
-from .serializers import CategorySerializer, TransactionSerializer
+from .serializers import CategorySerializer, TransactionSerializer, TransactionVerificationSerializer
 from ml.anomaly_detector import detect_anomalies
 
 
@@ -111,6 +113,63 @@ class TransactionViewSet(viewsets.ModelViewSet):
             queryset = queryset.order_by(*ordering_map[ordering])
         return queryset
 
+    def create(self, request, *args, **kwargs):
+        """Override create to intercept anomalous transactions and create a verification record."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        validated = serializer.validated_data
+        category = validated.get("category")
+        new_tx = SimpleNamespace(
+            id=-1,
+            amount=validated.get("amount"),
+            type=validated.get("type"),
+            category=SimpleNamespace(name=category.name if category else "Uncategorized"),
+            date=validated.get("date"),
+        )
+
+        recent = list(self.get_queryset().order_by("date", "created_at"))
+        candidates = [SimpleNamespace(
+            id=tx.id,
+            amount=tx.amount,
+            type=tx.type,
+            category=SimpleNamespace(name=tx.category.name if tx.category else "Uncategorized"),
+            date=tx.date,
+        ) for tx in recent]
+        candidates.append(new_tx)
+
+        results = detect_anomalies(candidates)
+        new_result = next((r for r in results if r.transaction_id == -1), None)
+
+        if new_result and new_result.is_anomaly:
+            token = uuid4().hex
+            proposed = {
+                "type": str(validated.get("type")),
+                "amount": float(validated.get("amount")),
+                "category": category.id if category else None,
+                "category_name": category.name if category else "Uncategorized",
+                "title": validated.get("title"),
+                "note": validated.get("note", ""),
+                "date": str(validated.get("date")),
+            }
+            verification = TransactionVerification.objects.create(
+                token=token,
+                user=request.user,
+                proposed=proposed,
+                anomaly_reason=new_result.reason,
+            )
+            data = TransactionVerificationSerializer(verification).data
+            return Response(
+                {
+                    "detail": "Transaction flagged as unusual. Upload bill photo to verify.",
+                    "verification": data,
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+
+        # not anomalous — proceed with normal create
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
@@ -151,6 +210,78 @@ class TransactionViewSet(viewsets.ModelViewSet):
                 "date": draft.date,
                 "raw_text": draft.raw_text,
             }
+        )
+
+    @action(detail=False, methods=["post"], url_path="verify")
+    def verify(self, request):
+        token = request.data.get("token")
+        image = request.FILES.get("image")
+        if not token:
+            raise ValidationError({"token": "Verification token is required."})
+        try:
+            verification = self.request.user.transaction_verifications.get(token=token)
+        except TransactionVerification.DoesNotExist:
+            raise ValidationError({"token": "Invalid verification token."})
+
+        if verification.is_verified:
+            return Response({"detail": "Already verified."}, status=status.HTTP_200_OK)
+
+        if image is None:
+            raise ValidationError({"image": "Please upload a bill photo for verification."})
+
+        categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense").order_by("name")
+        try:
+            draft = extract_expense_from_bill(image, list(categories))
+        except BillOcrError as exc:
+            raise ValidationError({"image": str(exc)})
+
+        # compare OCR draft with proposed
+        proposed = verification.proposed
+        ocr_amount = draft.amount
+        proposed_amount = proposed.get("amount")
+        amount_ok = False
+        if ocr_amount is not None:
+            try:
+                amount_ok = abs(float(ocr_amount) - float(proposed_amount)) <= max(1.0, float(proposed_amount) * 0.05)
+            except Exception:
+                amount_ok = False
+
+        date_ok = draft.date == proposed.get("date")
+        category_ok = draft.category_name == proposed.get("category_name")
+
+        verification.ocr_raw_text = draft.raw_text
+        verification.save()
+
+        if amount_ok and date_ok:
+            # create the real transaction
+            tx_serializer = TransactionSerializer(data={
+                "type": proposed.get("type"),
+                "amount": proposed.get("amount"),
+                "category": proposed.get("category"),
+                "title": proposed.get("title"),
+                "note": proposed.get("note"),
+                "date": proposed.get("date"),
+            }, context={"request": request})
+            tx_serializer.is_valid(raise_exception=True)
+            tx = tx_serializer.save(user=request.user)
+            verification.mark_verified(ocr_text=draft.raw_text)
+            return Response(TransactionSerializer(tx, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+        # not matched — return OCR draft and mismatch details
+        return Response(
+            {
+                "detail": "OCR did not match the proposed transaction.",
+                "proposed": proposed,
+                "ocr": {
+                    "amount": f"{draft.amount:.2f}" if draft.amount is not None else None,
+                    "date": draft.date,
+                    "category_name": draft.category_name,
+                    "title": draft.title,
+                    "raw_text": draft.raw_text,
+                },
+                "matches": {"amount": amount_ok, "date": date_ok, "category": category_ok},
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     @action(detail=False, methods=["get"], url_path="anomalies")

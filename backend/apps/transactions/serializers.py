@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.utils import timezone
 
 from .models import Category, Transaction
+from .models import TransactionVerification
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -61,3 +62,10 @@ class TransactionSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         validated_data["user"] = request.user
         return super().create(validated_data)
+
+
+class TransactionVerificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TransactionVerification
+        fields = ["token", "proposed", "anomaly_reason", "is_verified", "created_at", "verified_at"]
+        read_only_fields = ["token", "is_verified", "created_at", "verified_at"]

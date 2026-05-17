@@ -73,17 +73,27 @@ TEMPLATES = [
     }
 ]
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("POSTGRES_DB", default="expense_tracker"),
-        "USER": config("POSTGRES_USER", default="postgres"),
-        "PASSWORD": config("POSTGRES_PASSWORD", default="postgres"),
-        "HOST": config("POSTGRES_HOST", default="localhost"),
-        "PORT": config("POSTGRES_PORT", default="5432"),
-        "CONN_MAX_AGE": config("POSTGRES_CONN_MAX_AGE", default=60, cast=int),
+DATABASE_ENGINE = config("DATABASE_ENGINE", default="postgres").strip().lower()
+
+if DATABASE_ENGINE == "sqlite":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / config("SQLITE_NAME", default="db.sqlite3"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": config("POSTGRES_DB", default="expense_tracker"),
+            "USER": config("POSTGRES_USER", default="postgres"),
+            "PASSWORD": config("POSTGRES_PASSWORD", default="postgres"),
+            "HOST": config("POSTGRES_HOST", default="localhost"),
+            "PORT": config("POSTGRES_PORT", default="5432"),
+            "CONN_MAX_AGE": config("POSTGRES_CONN_MAX_AGE", default=60, cast=int),
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

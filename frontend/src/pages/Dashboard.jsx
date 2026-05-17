@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { AnimatedCounter, ProgressRing } from "../components/SharedComponents";
 import { useAuth } from "../context/AuthContext";
 import { fetchDashboardReport } from "../services/reports";
+import { fetchAnomalies } from "../services/transactions";
+import { FRONTEND_ONLY_MODE } from "../services/frontendMode";
 import { getBudgetBalance } from "../utils/budgetDisplay";
 
 const STYLES = `
@@ -52,6 +54,31 @@ const STYLES = `
 .status-chip.near_limit { color: var(--amber-l); border-color: var(--amber); }
 .status-chip.exceeded { color: var(--rose); border-color: var(--rose); }
 .error-box { margin-bottom: 16px; padding: 12px 14px; border-radius: 12px; color: var(--rose); border: 1px solid rgba(184,112,112,0.35); background: rgba(184,112,112,0.08); }
+.anomaly-section { margin-bottom: 18px; }
+.anomaly-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.anomaly-header-icon {
+  width: 32px; height: 32px; border-radius: 10px;
+  background: rgba(184, 112, 112, 0.12); border: 1px solid rgba(184, 112, 112, 0.3);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.anomaly-header-title { font-size: 13px; color: var(--sand-200); font-weight: 500; }
+.anomaly-header-title strong { color: var(--rose); }
+.anomaly-item {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 12px 14px; border-radius: 12px; margin-bottom: 6px;
+  background: rgba(184, 112, 112, 0.05); border: 1px solid rgba(184, 112, 112, 0.15);
+  transition: all 0.2s;
+}
+.anomaly-item:hover { background: rgba(184, 112, 112, 0.1); }
+.anomaly-item-info { flex: 1; min-width: 0; }
+.anomaly-item-title { font-size: 13px; color: var(--sand-100); font-weight: 500; }
+.anomaly-item-reason { font-size: 11px; color: var(--sand-500); margin-top: 2px; }
+.anomaly-item-amount { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--rose); white-space: nowrap; }
+.anomaly-item-score {
+  display: inline-block; padding: 2px 7px; border-radius: 999px;
+  font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  background: rgba(184, 112, 112, 0.15); color: var(--rose); margin-top: 4px;
+}
 @media (max-width: 980px) { .panel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .section-grid { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .panel-grid { grid-template-columns: 1fr; } }
 `;
@@ -72,6 +99,8 @@ export default function Dashboard() {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
+  const [anomalies, setAnomalies] = useState([]);
+  const [anomalyCount, setAnomalyCount] = useState(0);
   const budgetBalance = payload?.budget ? getBudgetBalance(payload.budget.remaining_amount) : null;
 
   useEffect(() => {
@@ -100,6 +129,25 @@ export default function Dashboard() {
     };
   }, []);
 
+  // Load anomalies separately (non-blocking)
+  useEffect(() => {
+    if (FRONTEND_ONLY_MODE) return;
+    let mounted = true;
+    async function loadAnomalies() {
+      try {
+        const data = await fetchAnomalies({ limit: 5 });
+        if (mounted) {
+          setAnomalies(data.results || []);
+          setAnomalyCount(data.count || 0);
+        }
+      } catch {
+        // anomaly fetch is optional
+      }
+    }
+    loadAnomalies();
+    return () => { mounted = false; };
+  }, []);
+
   const maxTrend = useMemo(() => {
     const items = payload?.monthly_trend || [];
     return Math.max(1, ...items.map((item) => Math.max(item.income, item.expense)));
@@ -126,6 +174,40 @@ export default function Dashboard() {
 
       {!loading && payload && (
         <>
+          {anomalyCount > 0 && (
+            <div className="anomaly-section">
+              <div className="section-card">
+                <div className="anomaly-header">
+                  <div className="anomaly-header-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--rose)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                  </div>
+                  <div className="anomaly-header-title">
+                    ML detected <strong>{anomalyCount} suspicious transaction{anomalyCount !== 1 ? "s" : ""}</strong>
+                  </div>
+                  <button className="btn" type="button" style={{ fontSize: "11px", padding: "6px 12px" }} onClick={() => navigate("/transactions")}>
+                    View All
+                  </button>
+                </div>
+                {anomalies.slice(0, 5).map((item) => (
+                  <div className="anomaly-item" key={item.id}>
+                    <div className="anomaly-item-info">
+                      <div className="anomaly-item-title">{item.title}</div>
+                      <div className="anomaly-item-reason">{item.anomaly_reason}</div>
+                      <div className="anomaly-item-score">score: {item.anomaly_score?.toFixed(4)}</div>
+                    </div>
+                    <div className="anomaly-item-amount">
+                      {item.type === "expense" ? "-" : "+"}Rs. {Number(item.amount).toLocaleString("en-IN")}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="panel-grid">
             <div className="panel-card">
               <div className="metric-label">Current Balance</div>
