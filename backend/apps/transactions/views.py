@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -10,9 +11,33 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from .models import Category, Transaction, TransactionVerification
-from .ocr import BillOcrError, extract_expense_from_bill
+from .ocr import BillOcrError, extract_amounts_from_text, extract_dates, extract_expense_from_bill
 from .serializers import CategorySerializer, TransactionSerializer, TransactionVerificationSerializer
 from ml.anomaly_detector import detect_anomalies
+
+
+def parse_money(value):
+    try:
+        return Decimal(str(value)).quantize(Decimal("0.01"))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def amounts_match(ocr_amounts, proposed_amount) -> bool:
+    expected = parse_money(proposed_amount)
+    if expected is None:
+        return False
+
+    tolerance = max(Decimal("1.00"), expected * Decimal("0.05"))
+    return any(abs(amount - expected) <= tolerance for amount in ocr_amounts)
+
+
+def dates_match(ocr_dates, proposed_date) -> bool:
+    try:
+        expected = date.fromisoformat(str(proposed_date))
+    except (TypeError, ValueError):
+        return False
+    return expected in ocr_dates
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -237,22 +262,41 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
         # compare OCR draft with proposed
         proposed = verification.proposed
-        ocr_amount = draft.amount
-        proposed_amount = proposed.get("amount")
-        amount_ok = False
-        if ocr_amount is not None:
-            try:
-                amount_ok = abs(float(ocr_amount) - float(proposed_amount)) <= max(1.0, float(proposed_amount) * 0.05)
-            except Exception:
-                amount_ok = False
+        ocr_amounts = extract_amounts_from_text(draft.raw_text)
+        if draft.amount is not None:
+            normalized_draft_amount = draft.amount.quantize(Decimal("0.01"))
+            if normalized_draft_amount not in ocr_amounts:
+                ocr_amounts.append(normalized_draft_amount)
 
-        date_ok = draft.date == proposed.get("date")
-        category_ok = draft.category_name == proposed.get("category_name")
+        ocr_dates = extract_dates(draft.raw_text)
+        try:
+            draft_date = date.fromisoformat(draft.date)
+        except (TypeError, ValueError):
+            draft_date = None
+        if draft_date and draft_date not in ocr_dates:
+            ocr_dates.append(draft_date)
+
+        proposed_amount = proposed.get("amount")
+        amount_ok = amounts_match(ocr_amounts, proposed_amount)
+        date_ok = dates_match(ocr_dates, proposed.get("date"))
+        category_ok = draft.category_name.lower() == proposed.get("category_name", "").lower()
+
+        # Also check if the proposed title appears in the OCR text (case-insensitive)
+        proposed_title = proposed.get("title", "").lower().strip()
+        title_ok = proposed_title and proposed_title in draft.raw_text.lower()
 
         verification.ocr_raw_text = draft.raw_text
         verification.save()
 
-        if amount_ok and date_ok:
+        # Verification passes if:
+        #  - amount and date match, OR
+        #  - amount matches and either category or title provides secondary evidence
+        verified = (
+            (amount_ok and date_ok)
+            or (amount_ok and (category_ok or title_ok))
+        )
+
+        if verified:
             # create the real transaction
             tx_serializer = TransactionSerializer(data={
                 "type": proposed.get("type"),
@@ -279,7 +323,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
                     "title": draft.title,
                     "raw_text": draft.raw_text,
                 },
-                "matches": {"amount": amount_ok, "date": date_ok, "category": category_ok},
+                "matches": {"amount": amount_ok, "date": date_ok, "category": category_ok, "title": title_ok},
             },
             status=status.HTTP_400_BAD_REQUEST,
         )

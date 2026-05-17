@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Iterable
 
@@ -138,7 +139,7 @@ def transactions_to_feature_rows(transactions: Iterable) -> list[dict]:
     rows = []
     for transaction in transactions:
         category = getattr(transaction, "category", None)
-        tx_date = transaction.date
+        tx_date = transaction.date or date.today()
         rows.append(
             {
                 "amount": float(transaction.amount),
@@ -153,6 +154,12 @@ def transactions_to_feature_rows(transactions: Iterable) -> list[dict]:
     return rows
 
 
+# Absolute amount thresholds for anomaly detection fallback.
+# Transactions exceeding these are always flagged, even with few data points.
+_ABSOLUTE_THRESHOLD_HIGH = 500_000   # Rs. 5,00,000
+_RATIO_THRESHOLD = 10                # 10x the median = suspicious
+
+
 def _statistical_fallback(transactions: list) -> list[AnomalyResult]:
     if not transactions:
         return []
@@ -160,22 +167,46 @@ def _statistical_fallback(transactions: list) -> list[AnomalyResult]:
     amounts = np.array([float(transaction.amount) for transaction in transactions], dtype=float)
     mean = float(amounts.mean())
     std = float(amounts.std())
-    if std == 0:
-        return [
-            AnomalyResult(transaction.id, False, 0.0, "Not enough variation to detect unusual spending.")
-            for transaction in transactions
-        ]
+    median = float(np.median(amounts))
 
     results = []
     for transaction, amount in zip(transactions, amounts):
-        z_score = abs((amount - mean) / std)
-        is_anomaly = z_score >= 2.5
+        is_anomaly = False
+        anomaly_score = 0.0
+        reason = ""
+
+        # Check 1: Absolute threshold for extremely large amounts.
+        if amount >= _ABSOLUTE_THRESHOLD_HIGH:
+            is_anomaly = True
+            anomaly_score = max(anomaly_score, round(amount / _ABSOLUTE_THRESHOLD_HIGH, 6))
+            reason = f"Amount Rs. {amount:,.0f} exceeds the safe threshold of Rs. {_ABSOLUTE_THRESHOLD_HIGH:,}."
+
+        # Check 2: Ratio-based check against the median.
+        if median > 0 and amount >= median * _RATIO_THRESHOLD:
+            ratio = amount / median
+            is_anomaly = True
+            anomaly_score = max(anomaly_score, round(ratio, 6))
+            if not reason:
+                reason = f"Amount is {ratio:.1f}x the median transaction amount."
+
+        # Check 3: Z-score check with a lower threshold for small datasets.
+        if std > 0:
+            z_score = abs((amount - mean) / std)
+            if z_score >= 2.0:
+                is_anomaly = True
+                anomaly_score = max(anomaly_score, round(float(z_score), 6))
+                if not reason:
+                    reason = "Amount is far from the user's average for this small dataset."
+
+        if not is_anomaly:
+            reason = "Looks consistent with recent transaction patterns."
+
         results.append(
             AnomalyResult(
                 transaction_id=transaction.id,
                 is_anomaly=is_anomaly,
-                anomaly_score=round(float(z_score), 6),
-                reason=_build_reason(transaction, is_anomaly, fallback=True),
+                anomaly_score=anomaly_score,
+                reason=reason,
             )
         )
     return results

@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.transactions.models import Category, Transaction
+from apps.transactions.models import Category, Transaction, TransactionVerification
 from apps.transactions.ocr import BillDraft, parse_bill_text
 
 
@@ -151,6 +151,32 @@ class TransactionApiTests(APITestCase):
         self.assertEqual(draft.category_id, groceries.id)
         self.assertEqual(draft.title, "Fresh Mart Supermarket")
 
+    def test_parse_bill_text_ignores_invoice_year_for_amount_and_separator_title(self):
+        subscriptions = Category.objects.create(name="Subscriptions", type="expense", user=None)
+        draft = parse_bill_text(
+            """
+            ==============================================================
+            |                         NETFLIX
+            ==============================================================
+            Invoice Number: IN-2026-984721A
+            Invoice Date: 01 May 2026
+            --------------------------------------------------------------
+            SOLD TO:
+            Anurag Yadav
+            --------------------------------------------------------------
+            TOTAL AMOUNT PAID (INR) Rs. 649.00
+            --------------------------------------------------------------
+            Payment Status: SUCCESSFUL
+            Thank you for your membership!
+            """,
+            [self.default_expense, subscriptions],
+        )
+
+        self.assertEqual(draft.amount, Decimal("649.00"))
+        self.assertEqual(draft.date, "2026-05-01")
+        self.assertEqual(draft.category_id, subscriptions.id)
+        self.assertEqual(draft.title, "NETFLIX")
+
     @patch("apps.transactions.views.extract_expense_from_bill")
     def test_scan_bill_returns_ocr_draft(self, mock_extract):
         mock_extract.return_value = BillDraft(
@@ -254,3 +280,47 @@ class TransactionApiTests(APITestCase):
         # Should create transaction
         self.assertIn(verify_resp.status_code, (status.HTTP_200_OK, status.HTTP_201_CREATED))
         self.assertTrue(Transaction.objects.filter(title=data["title"]).exists())
+
+    @patch("apps.transactions.views.extract_expense_from_bill")
+    def test_verification_accepts_bill_date_and_amount_format_variants(self, mock_extract):
+        subscriptions = Category.objects.create(name="Subscriptions", type="expense", user=None)
+        verification = TransactionVerification.objects.create(
+            user=self.user,
+            proposed={
+                "type": "expense",
+                "amount": 649.0,
+                "category": subscriptions.id,
+                "category_name": subscriptions.name,
+                "title": "Netflix",
+                "note": "",
+                "date": "2026-05-01",
+            },
+            anomaly_reason="Unusual combination of amount, timing, type, and category.",
+        )
+        mock_extract.return_value = BillDraft(
+            amount=None,
+            date=timezone.localdate().isoformat(),
+            title="NETFLIX",
+            category_id=subscriptions.id,
+            category_name=subscriptions.name,
+            note="Scanned from bill photo.",
+            raw_text="""
+            NETFLIX
+            Invoice Number: IN-2026-984721A
+            Invoice Date: 01 May 2026
+            TOTAL AMOUNT PAID (INR) Rs. 649.00
+            Payment Status: SUCCESSFUL
+            """,
+        )
+
+        image = SimpleUploadedFile("netflix.png", b"fake-image", content_type="image/png")
+        response = self.client.post(
+            "/api/transactions/verify/",
+            {"token": verification.token, "image": image},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["amount"], "649.00")
+        self.assertEqual(response.data["date"], "2026-05-01")
+        self.assertTrue(Transaction.objects.filter(title="Netflix", amount=Decimal("649.00")).exists())

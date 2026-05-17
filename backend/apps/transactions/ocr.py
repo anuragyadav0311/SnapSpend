@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import statistics
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -22,6 +23,9 @@ MONEY_RE = re.compile(
     re.IGNORECASE,
 )
 NUMBER_TOKEN_RE = re.compile(r"[A-Za-z0-9.,]+")
+DATE_LIKE_RE = re.compile(
+    r"\b(?:20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})\b"
+)
 
 MONTHS = {
     "jan": 1,
@@ -101,6 +105,7 @@ CATEGORY_KEYWORDS = {
     "Rent": {"rent", "lease"},
     "Gifts & Donations": {"gift", "donation", "charity"},
 }
+GENERIC_TITLE_KEYWORDS = {"subscription", "membership", "renewal", "booking", "premium", "policy"}
 
 
 class BillOcrError(ValueError):
@@ -184,7 +189,27 @@ def build_ocr_variants(image: Image.Image) -> list[Image.Image]:
     sharpened = ImageOps.autocontrast(resized.filter(ImageFilter.SHARPEN))
     thresholded = sharpened.point(lambda px: 255 if px > 168 else 0).convert("L")
     boosted = ImageOps.autocontrast(resized.point(lambda px: 255 if px > 188 else max(0, px - 32)).convert("L"))
-    return [resized, sharpened, thresholded, boosted]
+
+    variants = [resized, sharpened, thresholded, boosted]
+
+    # Detect dark-background images (screenshots, dark-mode bills, etc.)
+    # by checking if the average pixel intensity is below 128.
+    # Tesseract works best with dark text on light background, so we add
+    # inverted variants to handle light-text-on-dark-background images.
+
+    sample_data = list(resized.getdata())
+    avg_pixel = statistics.mean(sample_data) if sample_data else 128
+    if avg_pixel < 128:
+        inverted_resized = ImageOps.invert(resized)
+        inverted_sharpened = ImageOps.autocontrast(inverted_resized.filter(ImageFilter.SHARPEN))
+        inverted_thresholded = inverted_sharpened.point(lambda px: 255 if px > 168 else 0).convert("L")
+        inverted_boosted = ImageOps.autocontrast(
+            inverted_resized.point(lambda px: 255 if px > 188 else max(0, px - 32)).convert("L")
+        )
+        # Prepend inverted variants so they are tried first for dark images
+        variants = [inverted_resized, inverted_sharpened, inverted_thresholded, inverted_boosted] + variants
+
+    return variants
 
 
 def normalize_ocr_text(raw_text: str) -> str:
@@ -229,6 +254,10 @@ def infer_amount(lines: list[str]) -> Decimal | None:
         if any(token in lowered for token in ("phone", "mobile", "gstin", "invoice no", "bill no", "order id", "date", "time")):
             continue
 
+        money_context = has_money_context(line)
+        if not money_context and looks_like_reference_or_date_line(line):
+            continue
+
         priority = 0
         if any(
             token in lowered
@@ -245,11 +274,9 @@ def infer_amount(lines: list[str]) -> Decimal | None:
             for token in ("subtotal", "sub total", "tax", "cgst", "sgst", "igst", "change", "qty", "rate")
         ):
             priority -= 2
+        if not money_context:
+            priority -= 3
 
-        money_context = any(
-            token in lowered
-            for token in ("total", "subtotal", "sub total", "tax", "gst", "cgst", "sgst", "igst", "paid", "cash", "card", "upi", "amount")
-        )
         for value in extract_line_amounts(line, money_context=money_context):
             candidates.append((priority, amount_plausibility_score(value), value, index))
 
@@ -258,6 +285,60 @@ def infer_amount(lines: list[str]) -> Decimal | None:
 
     _, _, value, _ = max(candidates, key=lambda item: (item[0], item[1], item[2], item[3]))
     return value.quantize(Decimal("0.01"))
+
+
+def extract_amounts_from_text(raw_text: str) -> list[Decimal]:
+    amounts = []
+    seen = set()
+
+    for line in clean_lines(raw_text):
+        money_context = has_money_context(line)
+        if not money_context:
+            continue
+
+        for amount in extract_line_amounts(line, money_context=money_context):
+            normalized = amount.quantize(Decimal("0.01"))
+            if normalized not in seen:
+                amounts.append(normalized)
+                seen.add(normalized)
+
+    return amounts
+
+
+def has_money_context(line: str) -> bool:
+    lowered = line.lower()
+    return any(
+        token in lowered
+        for token in (
+            "total",
+            "subtotal",
+            "sub total",
+            "tax",
+            "gst",
+            "cgst",
+            "sgst",
+            "igst",
+            "paid",
+            "cash",
+            "card",
+            "upi",
+            "amount",
+            "rs",
+            "inr",
+        )
+    ) or "\u20b9" in line
+
+
+def looks_like_reference_or_date_line(line: str) -> bool:
+    lowered = line.lower()
+    if any(token in lowered for token in ("invoice", "order", "reference", "receipt", "transaction id")):
+        return True
+    if DATE_LIKE_RE.search(line):
+        return True
+
+    digits = sum(char.isdigit() for char in line)
+    separators = sum(char in "-/:_#" for char in line)
+    return digits >= 4 and separators >= 1
 
 
 def extract_line_amounts(line: str, money_context: bool) -> list[Decimal]:
@@ -351,18 +432,30 @@ def amount_plausibility_score(amount: Decimal) -> int:
 
 
 def infer_date(raw_text: str) -> date:
+    dates = extract_dates(raw_text)
+    if dates:
+        return dates[0]
+
+    return timezone.localdate()
+
+
+def extract_dates(raw_text: str) -> list[date]:
+    dates = []
+    seen = set()
+
     for pattern in (
         r"\b(?P<year>20\d{2})[-/.](?P<month>\d{1,2})[-/.](?P<day>\d{1,2})\b",
         r"\b(?P<day>\d{1,2})[-/.](?P<month>\d{1,2})[-/.](?P<year>\d{2,4})\b",
-        r"\b(?P<day>\d{1,2})\s+(?P<month_name>[A-Za-z]{3,9})\s*,?\s*(?P<year>\d{2,4})\b",
-        r"\b(?P<month_name>[A-Za-z]{3,9})\s+(?P<day>\d{1,2})\s*,?\s*(?P<year>\d{2,4})\b",
+        r"\b(?P<day>\d{1,2})(?!\d)\s+(?P<month_name>[A-Za-z]{3,9})\s*,?\s*(?P<year>\d{2,4})\b",
+        r"\b(?P<month_name>[A-Za-z]{3,9})\s+(?P<day>\d{1,2})(?!\d)\s*,?\s*(?P<year>\d{2,4})\b",
     ):
         for match in re.finditer(pattern, raw_text, flags=re.IGNORECASE):
             parsed_date = build_date(match.groupdict())
-            if parsed_date:
-                return parsed_date
+            if parsed_date and parsed_date not in seen:
+                dates.append(parsed_date)
+                seen.add(parsed_date)
 
-    return timezone.localdate()
+    return dates
 
 
 def build_date(parts: dict[str, str]) -> date | None:
@@ -418,18 +511,68 @@ def infer_title(lines: list[str], category_name: str) -> str:
         "card",
         "upi",
         "tax",
+        "payment",
+        "status",
+        "successful",
+        "sold to",
+        "email",
+        "location",
+        "thank",
+        "membership",
+        "help",
     }
 
     for line in lines[:8]:
-        lowered = line.lower()
-        alpha_count = sum(char.isalpha() for char in line)
+        title = clean_title_candidate(line)
+        lowered = title.lower()
+        alpha_count = sum(char.isalpha() for char in title)
         if alpha_count < 3:
+            continue
+        if is_noise_title_line(title):
             continue
         if any(token in lowered for token in noisy_tokens):
             continue
-        return re.sub(r"\s+", " ", line)[:80]
+        return title[:80]
+
+    keyword_title = infer_title_from_keywords(lines, category_name)
+    if keyword_title:
+        return keyword_title
 
     return f"{category_name or 'Bill'} Expense"
+
+
+def infer_title_from_keywords(lines: list[str], category_name: str) -> str:
+    raw_text = "\n".join(lines).lower()
+    keywords = CATEGORY_KEYWORDS.get(category_name, set()) - GENERIC_TITLE_KEYWORDS
+    for keyword in sorted(keywords, key=len, reverse=True):
+        if keyword in raw_text and len(keyword) >= 4:
+            return keyword.title()
+    return ""
+
+
+def clean_title_candidate(line: str) -> str:
+    cleaned = re.sub(r"^[^A-Za-z0-9]+|[^A-Za-z0-9]+$", "", line)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def is_noise_title_line(line: str) -> bool:
+    compact = re.sub(r"\s+", "", line)
+    if not compact:
+        return True
+
+    alpha_chars = [char for char in compact if char.isalpha()]
+    punctuation_count = sum(not char.isalnum() for char in compact)
+    alpha_ratio = len(alpha_chars) / len(compact)
+    distinct_letters = {char.lower() for char in alpha_chars}
+
+    if len(compact) > 24 and alpha_ratio < 0.65:
+        return True
+    if len(compact) > 18 and punctuation_count > len(alpha_chars):
+        return True
+    if len(compact) > 18 and len(distinct_letters) <= 3:
+        return True
+
+    return False
 
 
 def score_bill_draft(draft: BillDraft) -> tuple[int, int, int]:
