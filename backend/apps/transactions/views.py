@@ -1,4 +1,7 @@
 from datetime import date
+from decimal import Decimal, InvalidOperation
+from types import SimpleNamespace
+from uuid import uuid4
 
 from django.db.models import Q
 from django.utils import timezone
@@ -7,9 +10,34 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from .models import Category, Transaction
-from .ocr import BillOcrError, extract_expense_from_bill
-from .serializers import CategorySerializer, TransactionSerializer
+from .models import Category, Transaction, TransactionVerification
+from .ocr import BillOcrError, extract_amounts_from_text, extract_dates, extract_expense_from_bill
+from .serializers import CategorySerializer, TransactionSerializer, TransactionVerificationSerializer
+from ml.anomaly_detector import detect_anomalies
+
+
+def parse_money(value):
+    try:
+        return Decimal(str(value)).quantize(Decimal("0.01"))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def amounts_match(ocr_amounts, proposed_amount) -> bool:
+    expected = parse_money(proposed_amount)
+    if expected is None:
+        return False
+
+    tolerance = max(Decimal("1.00"), expected * Decimal("0.05"))
+    return any(abs(amount - expected) <= tolerance for amount in ocr_amounts)
+
+
+def dates_match(ocr_dates, proposed_date) -> bool:
+    try:
+        expected = date.fromisoformat(str(proposed_date))
+    except (TypeError, ValueError):
+        return False
+    return expected in ocr_dates
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -110,6 +138,63 @@ class TransactionViewSet(viewsets.ModelViewSet):
             queryset = queryset.order_by(*ordering_map[ordering])
         return queryset
 
+    def create(self, request, *args, **kwargs):
+        """Override create to intercept anomalous transactions and create a verification record."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        validated = serializer.validated_data
+        category = validated.get("category")
+        new_tx = SimpleNamespace(
+            id=-1,
+            amount=validated.get("amount"),
+            type=validated.get("type"),
+            category=SimpleNamespace(name=category.name if category else "Uncategorized"),
+            date=validated.get("date"),
+        )
+
+        recent = list(self.get_queryset().order_by("date", "created_at"))
+        candidates = [SimpleNamespace(
+            id=tx.id,
+            amount=tx.amount,
+            type=tx.type,
+            category=SimpleNamespace(name=tx.category.name if tx.category else "Uncategorized"),
+            date=tx.date,
+        ) for tx in recent]
+        candidates.append(new_tx)
+
+        results = detect_anomalies(candidates)
+        new_result = next((r for r in results if r.transaction_id == -1), None)
+
+        if new_result and new_result.is_anomaly:
+            token = uuid4().hex
+            proposed = {
+                "type": str(validated.get("type")),
+                "amount": float(validated.get("amount")),
+                "category": category.id if category else None,
+                "category_name": category.name if category else "Uncategorized",
+                "title": validated.get("title"),
+                "note": validated.get("note", ""),
+                "date": str(validated.get("date")),
+            }
+            verification = TransactionVerification.objects.create(
+                token=token,
+                user=request.user,
+                proposed=proposed,
+                anomaly_reason=new_result.reason,
+            )
+            data = TransactionVerificationSerializer(verification).data
+            return Response(
+                {
+                    "detail": "Transaction flagged as unusual. Upload bill photo to verify.",
+                    "verification": data,
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+
+        # not anomalous — proceed with normal create
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
@@ -149,5 +234,142 @@ class TransactionViewSet(viewsets.ModelViewSet):
                 "note": draft.note,
                 "date": draft.date,
                 "raw_text": draft.raw_text,
+            }
+        )
+
+    @action(detail=False, methods=["post"], url_path="verify")
+    def verify(self, request):
+        token = request.data.get("token")
+        image = request.FILES.get("image")
+        if not token:
+            raise ValidationError({"token": "Verification token is required."})
+        try:
+            verification = self.request.user.transaction_verifications.get(token=token)
+        except TransactionVerification.DoesNotExist:
+            raise ValidationError({"token": "Invalid verification token."})
+
+        if verification.is_verified:
+            return Response({"detail": "Already verified."}, status=status.HTTP_200_OK)
+
+        if image is None:
+            raise ValidationError({"image": "Please upload a bill photo for verification."})
+
+        categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense").order_by("name")
+        try:
+            draft = extract_expense_from_bill(image, list(categories))
+        except BillOcrError as exc:
+            raise ValidationError({"image": str(exc)})
+
+        # compare OCR draft with proposed
+        proposed = verification.proposed
+        ocr_amounts = extract_amounts_from_text(draft.raw_text)
+        if draft.amount is not None:
+            normalized_draft_amount = draft.amount.quantize(Decimal("0.01"))
+            if normalized_draft_amount not in ocr_amounts:
+                ocr_amounts.append(normalized_draft_amount)
+
+        ocr_dates = extract_dates(draft.raw_text)
+        try:
+            draft_date = date.fromisoformat(draft.date)
+        except (TypeError, ValueError):
+            draft_date = None
+        if draft_date and draft_date not in ocr_dates:
+            ocr_dates.append(draft_date)
+
+        proposed_amount = proposed.get("amount")
+        amount_ok = amounts_match(ocr_amounts, proposed_amount)
+        date_ok = dates_match(ocr_dates, proposed.get("date"))
+        category_ok = draft.category_name.lower() == proposed.get("category_name", "").lower()
+
+        # Also check if the proposed title appears in the OCR text (case-insensitive)
+        proposed_title = proposed.get("title", "").lower().strip()
+        title_ok = proposed_title and proposed_title in draft.raw_text.lower()
+
+        verification.ocr_raw_text = draft.raw_text
+        verification.save()
+
+        # Verification passes if:
+        #  - amount and date match, OR
+        #  - amount matches and either category or title provides secondary evidence
+        verified = (
+            (amount_ok and date_ok)
+            or (amount_ok and (category_ok or title_ok))
+        )
+
+        if verified:
+            # create the real transaction
+            tx_serializer = TransactionSerializer(data={
+                "type": proposed.get("type"),
+                "amount": proposed.get("amount"),
+                "category": proposed.get("category"),
+                "title": proposed.get("title"),
+                "note": proposed.get("note"),
+                "date": proposed.get("date"),
+            }, context={"request": request})
+            tx_serializer.is_valid(raise_exception=True)
+            tx = tx_serializer.save(user=request.user)
+            verification.mark_verified(ocr_text=draft.raw_text)
+            return Response(TransactionSerializer(tx, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+        # not matched — return OCR draft and mismatch details
+        return Response(
+            {
+                "detail": "OCR did not match the proposed transaction.",
+                "proposed": proposed,
+                "ocr": {
+                    "amount": f"{draft.amount:.2f}" if draft.amount is not None else None,
+                    "date": draft.date,
+                    "category_name": draft.category_name,
+                    "title": draft.title,
+                    "raw_text": draft.raw_text,
+                },
+                "matches": {"amount": amount_ok, "date": date_ok, "category": category_ok, "title": title_ok},
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    @action(detail=False, methods=["get"], url_path="anomalies")
+    def anomalies(self, request):
+        try:
+            contamination = float(request.query_params.get("contamination", "0.08"))
+        except ValueError:
+            raise ValidationError({"contamination": "Enter a valid number."})
+
+        if not 0 < contamination < 0.5:
+            raise ValidationError({"contamination": "Value must be greater than 0 and less than 0.5."})
+
+        transactions = list(self.get_queryset().order_by("date", "created_at"))
+        results = detect_anomalies(transactions, contamination=contamination)
+        result_map = {result.transaction_id: result for result in results}
+        anomalous_transactions = [
+            transaction
+            for transaction in transactions
+            if result_map[transaction.id].is_anomaly
+        ]
+        anomalous_transactions.sort(
+            key=lambda transaction: result_map[transaction.id].anomaly_score,
+            reverse=True,
+        )
+
+        limit = request.query_params.get("limit")
+        if limit:
+            try:
+                limit_value = int(limit)
+            except ValueError:
+                raise ValidationError({"limit": "Enter a valid integer."})
+            anomalous_transactions = anomalous_transactions[: max(limit_value, 0)]
+
+        return Response(
+            {
+                "count": len(anomalous_transactions),
+                "total_checked": len(transactions),
+                "results": [
+                    {
+                        **TransactionSerializer(transaction, context={"request": request}).data,
+                        "anomaly_score": result_map[transaction.id].anomaly_score,
+                        "anomaly_reason": result_map[transaction.id].reason,
+                    }
+                    for transaction in anomalous_transactions
+                ],
             }
         )

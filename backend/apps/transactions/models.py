@@ -1,8 +1,15 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.utils import timezone
+import uuid
+from django.db.models import JSONField
 
 User = get_user_model()
+
+
+def _generate_token():
+    return uuid.uuid4().hex
 
 
 class Category(models.Model):
@@ -53,3 +60,24 @@ class Transaction(models.Model):
     def clean(self):
         if self.category and self.type != self.category.type:
             raise ValidationError("Transaction type must match category type.")
+
+
+class TransactionVerification(models.Model):
+    token = models.CharField(max_length=64, unique=True, default=_generate_token)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="transaction_verifications")
+    proposed = JSONField()
+    anomaly_reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    is_verified = models.BooleanField(default=False)
+    ocr_raw_text = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def mark_verified(self, ocr_text: str | None = None):
+        self.is_verified = True
+        self.verified_at = timezone.now()
+        if ocr_text:
+            self.ocr_raw_text = ocr_text
+        self.save()

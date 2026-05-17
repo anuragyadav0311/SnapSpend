@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CategoryPill } from "../components/SharedComponents";
 import { FRONTEND_ONLY_MODE } from "../services/frontendMode";
@@ -7,10 +7,12 @@ import {
   createCategory,
   createTransaction,
   deleteTransaction,
+  fetchAnomalies,
   listCategories,
   listTransactions,
   scanBillPhoto,
   updateTransaction,
+  verifyTransaction,
 } from "../services/transactions";
 
 const STYLES = `
@@ -625,6 +627,251 @@ const STYLES = `
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(184, 112, 112, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(184, 112, 112, 0); }
+}
+
+.anomaly-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: riseIn 0.3s ease forwards;
+}
+
+.anomaly-modal {
+  width: 100%;
+  max-width: 460px;
+  background: var(--glass-bg);
+  border: 1px solid rgba(184, 112, 112, 0.35);
+  border-radius: 20px;
+  padding: 24px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+  animation: riseIn 0.4s 0.1s ease forwards;
+  opacity: 0;
+}
+
+.anomaly-icon-wrap {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: rgba(184, 112, 112, 0.12);
+  border: 1px solid rgba(184, 112, 112, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.anomaly-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--rose);
+  margin-bottom: 8px;
+}
+
+.anomaly-desc {
+  font-size: 13px;
+  color: var(--sand-300);
+  line-height: 1.55;
+  margin-bottom: 16px;
+}
+
+.anomaly-reason {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(184, 112, 112, 0.08);
+  border: 1px solid rgba(184, 112, 112, 0.2);
+  font-size: 12px;
+  color: var(--sand-200);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.anomaly-reason strong {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--rose);
+  margin-bottom: 4px;
+}
+
+.anomaly-proposed {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--surface-border);
+  margin-bottom: 16px;
+}
+
+.anomaly-proposed-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.anomaly-proposed-label {
+  color: var(--sand-500);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+}
+
+.anomaly-proposed-value {
+  color: var(--sand-100);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+}
+
+.anomaly-upload {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: 2px dashed rgba(184, 112, 112, 0.3);
+  background: rgba(184, 112, 112, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  font-family: 'Figtree', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sand-200);
+  transition: all 0.2s;
+  margin-bottom: 12px;
+}
+
+.anomaly-upload:hover {
+  border-color: var(--rose);
+  background: rgba(184, 112, 112, 0.1);
+}
+
+.anomaly-upload.has-file {
+  border-style: solid;
+  border-color: var(--sage);
+  background: rgba(122, 158, 135, 0.08);
+  color: var(--sage-l);
+}
+
+.anomaly-upload input {
+  display: none;
+}
+
+.anomaly-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.anomaly-status {
+  font-size: 12px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.anomaly-status.error {
+  color: var(--rose);
+  background: rgba(184, 112, 112, 0.08);
+  border: 1px solid rgba(184, 112, 112, 0.2);
+}
+
+.anomaly-status.success {
+  color: var(--sage-l);
+  background: rgba(122, 158, 135, 0.08);
+  border: 1px solid rgba(122, 158, 135, 0.2);
+}
+
+.anomaly-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(184, 112, 112, 0.12);
+  border: 1px solid rgba(184, 112, 112, 0.3);
+  color: var(--rose);
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+.anomaly-banner {
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: rgba(184, 112, 112, 0.08);
+  border: 1px solid rgba(184, 112, 112, 0.25);
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.anomaly-banner-copy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.anomaly-banner-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(184, 112, 112, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.anomaly-banner-text {
+  font-size: 13px;
+  color: var(--sand-200);
+}
+
+.anomaly-banner-text strong {
+  color: var(--rose);
+}
+
+.anomaly-banner-btn {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(184, 112, 112, 0.3);
+  background: rgba(184, 112, 112, 0.1);
+  color: var(--rose);
+  font-family: 'Figtree', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.anomaly-banner-btn:hover {
+  background: rgba(184, 112, 112, 0.18);
+  border-color: var(--rose);
+}
 `;
 
 const COMPOSE_TYPES = ["expense", "income"];
@@ -769,6 +1016,16 @@ export default function Transactions() {
   const [submitting, setSubmitting] = useState(false);
   const [scanningBill, setScanningBill] = useState(false);
 
+  // ML anomaly detection state
+  const [anomalyModal, setAnomalyModal] = useState(null); // { detail, verification }
+  const [verifyFile, setVerifyFile] = useState(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyStatus, setVerifyStatus] = useState(""); // error or success message
+  const [verifyStatusType, setVerifyStatusType] = useState(""); // 'error' or 'success'
+  const [anomalies, setAnomalies] = useState([]);
+  const [anomalyCount, setAnomalyCount] = useState(0);
+  const verifyInputRef = useRef(null);
+
   useEffect(() => {
     let mounted = true;
 
@@ -788,6 +1045,19 @@ export default function Transactions() {
 
         setTransactions(transactionsData.map(mapTransaction));
         setCategories(categoriesData);
+
+        // Load anomaly data in background (non-blocking)
+        if (!FRONTEND_ONLY_MODE) {
+          try {
+            const anomalyData = await fetchAnomalies({ limit: 10 });
+            if (mounted) {
+              setAnomalies(anomalyData.results || []);
+              setAnomalyCount(anomalyData.count || 0);
+            }
+          } catch {
+            // anomaly fetch is optional, don't block the page
+          }
+        }
       } catch (error) {
         if (mounted) {
           setPageError(error.message || "Unable to load transactions.");
@@ -1021,22 +1291,33 @@ export default function Transactions() {
         date: draft.date,
       };
 
-      const savedTransaction = editingId
-        ? await updateTransaction(editingId, payload)
-        : await createTransaction(payload);
-      const mappedTransaction = mapTransaction(savedTransaction);
+      if (editingId) {
+        const savedTransaction = await updateTransaction(editingId, payload);
+        const mappedTransaction = mapTransaction(savedTransaction);
+        setTransactions((current) =>
+          current.map((transaction) => (transaction.id === editingId ? mappedTransaction : transaction))
+        );
+        setActiveCategory("All");
+        setSearch("");
+        closeComposer();
+      } else {
+        const result = await createTransaction(payload);
 
-      setTransactions((current) => {
-        if (editingId) {
-          return current.map((transaction) => (transaction.id === editingId ? mappedTransaction : transaction));
+        // ML anomaly detection: handle flagged transaction
+        if (result._anomalyFlag) {
+          setAnomalyModal({
+            detail: result.detail,
+            verification: result.verification,
+          });
+          closeComposer();
+        } else {
+          const mappedTransaction = mapTransaction(result);
+          setTransactions((current) => [mappedTransaction, ...current]);
+          setActiveCategory("All");
+          setSearch("");
+          closeComposer();
         }
-
-        return [mappedTransaction, ...current];
-      });
-
-      setActiveCategory("All");
-      setSearch("");
-      closeComposer();
+      }
     } catch (error) {
       setComposeError(error.message || "Unable to save the transaction.");
     } finally {
@@ -1056,6 +1337,57 @@ export default function Transactions() {
       setPageError(error.message || "Unable to delete the transaction.");
     }
   };
+
+  // ML verification handlers
+  const closeAnomalyModal = () => {
+    setAnomalyModal(null);
+    setVerifyFile(null);
+    setVerifying(false);
+    setVerifyStatus("");
+    setVerifyStatusType("");
+  };
+
+  const handleVerifyUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setVerifyFile(file);
+      setVerifyStatus("");
+    }
+  };
+
+  const handleVerifySubmit = async () => {
+    if (!anomalyModal || !verifyFile) return;
+
+    setVerifying(true);
+    setVerifyStatus("");
+    setVerifyStatusType("");
+
+    try {
+      const result = await verifyTransaction(anomalyModal.verification.token, verifyFile);
+      // Verification successful — transaction was created
+      const mappedTransaction = mapTransaction(result);
+      setTransactions((current) => [mappedTransaction, ...current]);
+      setVerifyStatus("Verified! Transaction saved successfully.");
+      setVerifyStatusType("success");
+      setTimeout(() => closeAnomalyModal(), 1500);
+    } catch (error) {
+      setVerifyStatus(error.message || "Verification failed. Bill doesn't match the transaction.");
+      setVerifyStatusType("error");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  // Set of anomaly transaction IDs for badge display
+  const anomalyIdSet = useMemo(
+    () => new Set(anomalies.map((a) => a.id)),
+    [anomalies]
+  );
+
+  const anomalyReasonMap = useMemo(
+    () => Object.fromEntries(anomalies.map((a) => [a.id, a.anomaly_reason])),
+    [anomalies]
+  );
 
   return (
     <>
@@ -1083,6 +1415,23 @@ export default function Transactions() {
 
       {pageError && <div className="txn-status error">{pageError}</div>}
       {loading && <div className="txn-status">Loading your transactions...</div>}
+
+      {!loading && anomalyCount > 0 && (
+        <div className="anomaly-banner" style={{ opacity: 0, animation: "riseIn 0.6s 0.14s cubic-bezier(0.22,1,0.36,1) forwards" }}>
+          <div className="anomaly-banner-copy">
+            <div className="anomaly-banner-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--rose)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
+            <div className="anomaly-banner-text">
+              ML detected <strong>{anomalyCount} suspicious transaction{anomalyCount !== 1 ? "s" : ""}</strong> in your history.
+            </div>
+          </div>
+        </div>
+      )}
 
       {composeType && (
         <div className="compose-card" style={{ opacity: 0, animation: "riseIn 0.6s 0.16s cubic-bezier(0.22,1,0.36,1) forwards" }}>
@@ -1283,6 +1632,16 @@ export default function Transactions() {
                       <div className="txn-card-meta">
                         <span className="txn-card-pill">{transaction.category}</span>
                         {transaction.note && <span>{transaction.note}</span>}
+                        {anomalyIdSet.has(transaction.id) && (
+                          <span className="anomaly-badge" title={anomalyReasonMap[transaction.id] || "Suspicious transaction"}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                              <line x1="12" y1="9" x2="12" y2="13" />
+                              <line x1="12" y1="17" x2="12.01" y2="17" />
+                            </svg>
+                            ML Flagged
+                          </span>
+                        )}
                       </div>
                       <div className="txn-card-actions">
                         <button className="txn-action" type="button" onClick={() => startEdit(transaction)}>Edit</button>
@@ -1328,6 +1687,83 @@ export default function Transactions() {
           </span>
         </button>
       </div>
+
+      {/* ML Anomaly Verification Modal */}
+      {anomalyModal && (
+        <div className="anomaly-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeAnomalyModal(); }}>
+          <div className="anomaly-modal">
+            <div className="anomaly-icon-wrap">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--rose)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
+            <div className="anomaly-title">Unusual Transaction Detected</div>
+            <div className="anomaly-desc">{anomalyModal.detail}</div>
+
+            <div className="anomaly-reason">
+              <strong>ML Detection Reason</strong>
+              {anomalyModal.verification.anomaly_reason}
+            </div>
+
+            <div className="anomaly-proposed">
+              <div className="anomaly-proposed-row">
+                <span className="anomaly-proposed-label">Title</span>
+                <span className="anomaly-proposed-value">{anomalyModal.verification.proposed.title}</span>
+              </div>
+              <div className="anomaly-proposed-row">
+                <span className="anomaly-proposed-label">Amount</span>
+                <span className="anomaly-proposed-value">Rs. {Number(anomalyModal.verification.proposed.amount).toLocaleString("en-IN")}</span>
+              </div>
+              <div className="anomaly-proposed-row">
+                <span className="anomaly-proposed-label">Category</span>
+                <span className="anomaly-proposed-value">{anomalyModal.verification.proposed.category_name}</span>
+              </div>
+              <div className="anomaly-proposed-row">
+                <span className="anomaly-proposed-label">Date</span>
+                <span className="anomaly-proposed-value">{anomalyModal.verification.proposed.date}</span>
+              </div>
+            </div>
+
+            <label className={`anomaly-upload ${verifyFile ? "has-file" : ""}`}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              {verifyFile ? verifyFile.name : "Upload bill photo to verify"}
+              <input
+                ref={verifyInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleVerifyUpload}
+              />
+            </label>
+
+            {verifyStatus && (
+              <div className={`anomaly-status ${verifyStatusType}`}>
+                {verifyStatus}
+              </div>
+            )}
+
+            <div className="anomaly-actions">
+              <button className="compose-btn ghost" type="button" onClick={closeAnomalyModal}>
+                Dismiss
+              </button>
+              <button
+                className="compose-btn primary"
+                type="button"
+                disabled={!verifyFile || verifying}
+                onClick={handleVerifySubmit}
+              >
+                {verifying ? "Verifying..." : "Verify & Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

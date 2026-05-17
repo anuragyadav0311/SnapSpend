@@ -1,0 +1,49 @@
+{
+  "raw_rows": 13260,
+  "dropped_rows": 242,
+  "dropped_reasons": {
+    "missing_expense": 236,
+    "missing_income": 6
+  },
+  "missing_by_column": {
+    "Expense": 236,
+    "Income": 6
+  },
+  "year_range": [
+    2010,
+    2021
+  ],
+  "unique_counts": {
+    "years": 10,
+    "geos": 13,
+    "income_quintiles": 6,
+    "expense_categories": 17,
+    "age_groups": 6,
+    "family_income_groups": 17
+  },
+  "clean_rows": 13018,
+  "train_rows": 10414,
+  "test_rows": 2604,
+  "test_size": 0.2,
+  "random_seed": 42,
+  "model_columns": [
+    "year",
+    "year_index",
+    "geo",
+    "income_quintile",
+    "expense_category",
+    "coordinate",
+    "expense",
+    "log_expense",
+    "age_group",
+    "family_income_group",
+    "income",
+    "log_income",
+    "expense_to_income_ratio"
+  ],
+  "outputs": {
+    "clean": "dataset/processed/income_expense_clean.csv",
+    "train": "dataset/processed/income_expense_train.csv",
+    "test": "dataset/processed/income_expense_test.csv"
+  }
+}
