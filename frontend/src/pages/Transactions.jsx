@@ -162,6 +162,10 @@ const STYLES = `
   color-scheme: dark;
 }
 
+.compose-select.placeholder {
+  color: var(--sand-500);
+}
+
 .compose-select option,
 .sort-select option {
   background: #f6efe4;
@@ -956,8 +960,7 @@ function iconLabelFor(type, category) {
   return (clean.slice(0, 2) || "TX").padEnd(2, "X");
 }
 
-function createDraft(type, categories) {
-  const fallbackCategory = categories.find((category) => category.type === type)?.id || "";
+function createDraft(type) {
   const today = todayValue();
 
   return {
@@ -965,7 +968,7 @@ function createDraft(type, categories) {
     amount: "",
     date: today,
     note: "",
-    categoryId: fallbackCategory,
+    categoryId: "",
     customCategory: "",
   };
 }
@@ -1082,7 +1085,7 @@ export default function Transactions() {
     }
 
     if (!editingId) {
-      setDraft(createDraft(composeType, categories));
+      setDraft(createDraft(composeType));
     }
 
     setComposeError("");
@@ -1182,7 +1185,7 @@ export default function Transactions() {
 
   const openComposer = (type) => {
     setEditingId(null);
-    setDraft(createDraft(type, categories));
+    setDraft(createDraft(type));
     setBillScanStatus("");
     setSearchParams({ compose: type });
   };
@@ -1241,7 +1244,7 @@ export default function Transactions() {
         ...current,
         title: result.title || current.title,
         amount: result.amount || current.amount,
-        date: result.date || current.date,
+        date: clampDateToToday(result.date) || current.date,
         categoryId: result.category ? String(result.category) : current.categoryId,
         note: result.note || current.note,
       }));
@@ -1503,11 +1506,11 @@ export default function Transactions() {
             <div className="compose-field">
               <label className="compose-label">Category</label>
               <select
-                className="compose-select"
+                className={`compose-select${draft.categoryId ? "" : " placeholder"}`}
                 value={draft.categoryId}
                 onChange={(event) => setDraft((current) => ({ ...current, categoryId: event.target.value }))}
               >
-                <option value="">Uncategorized</option>
+                <option value="">Select category</option>
                 {categoryOptions.map((category) => (
                   <option key={category.id} value={String(category.id)}>{category.name}</option>
                 ))}

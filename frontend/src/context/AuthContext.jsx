@@ -2,10 +2,12 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { FRONTEND_ONLY_MODE } from "../services/frontendMode";
 import {
   changeCurrentPassword,
+  completeOAuthLogin,
   fetchCurrentUser,
   loginUser,
   logoutUser,
   registerUser,
+  startOAuth,
   updateCurrentUser,
 } from "../services/auth";
 import { clearTokens, hasStoredSession } from "../services/tokenStorage";
@@ -139,6 +141,31 @@ export function AuthProvider({ children }) {
         const currentUser = await fetchCurrentUser();
         setUser(currentUser);
         return currentUser;
+      },
+      async beginOAuth(provider) {
+        if (FRONTEND_ONLY_MODE) {
+          const mockUser = buildMockUser({
+            name: provider === "apple" ? "Apple Demo User" : "Google Demo User",
+            email: `${provider}.demo@ledger.local`,
+          });
+          writeMockUser(mockUser);
+          setUser(mockUser);
+          return { authorization_url: "/auth/callback?token=frontend-only" };
+        }
+
+        return startOAuth(provider);
+      },
+      async completeOAuth({ token, remember = true }) {
+        if (FRONTEND_ONLY_MODE) {
+          const mockUser = buildMockUser({ name: "Demo User", email: "demo@ledger.local" });
+          writeMockUser(mockUser);
+          setUser(mockUser);
+          return mockUser;
+        }
+
+        const response = await completeOAuthLogin({ token, remember });
+        setUser(response.user);
+        return response.user;
       },
       async logout() {
         if (FRONTEND_ONLY_MODE) {

@@ -202,6 +202,17 @@ VITE_FRONTEND_ONLY=true
 | `POSTGRES_PORT` | `5432` | PostgreSQL port |
 | `FRONTEND_URL` | `http://localhost:5173` | Frontend URL for CORS |
 | `FRONTEND_URLS` | same as above | Comma-separated frontend URLs for CORS |
+| `GOOGLE_OAUTH_CLIENT_ID` | empty | Google OAuth client ID for Sign in with Google |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | empty | Google OAuth client secret |
+| `GOOGLE_OAUTH_REDIRECT_URI` | empty | Backend callback URI registered with Google, for example `http://localhost:8000/api/auth/oauth/google/callback/` |
+| `APPLE_OAUTH_CLIENT_ID` | empty | Apple Services ID / client ID |
+| `APPLE_OAUTH_TEAM_ID` | empty | Apple Developer team ID |
+| `APPLE_OAUTH_KEY_ID` | empty | Apple Sign in key ID |
+| `APPLE_OAUTH_PRIVATE_KEY` | empty | Apple private key PEM, with newlines escaped as `\\n` in `.env` |
+| `APPLE_OAUTH_REDIRECT_URI` | empty | Backend callback URI registered with Apple |
+| `OAUTH_FRONTEND_CALLBACK_PATH` | `/auth/callback` | Frontend route that completes provider sign-in |
+
+> Note: Apple requires an HTTPS redirect URI on a real domain for web Sign in with Apple. `localhost` and raw IP callback URLs are not accepted by Apple.
 
 #### Frontend (`frontend/.env`)
 

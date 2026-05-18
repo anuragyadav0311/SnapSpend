@@ -1,7 +1,12 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
+
+from apps.accounts.oauth import build_oauth_handoff_token
 from apps.accounts.serializers import CustomTokenObtainPairSerializer
 
 
@@ -21,6 +26,7 @@ class AccountsAuthTests(APITestCase):
         self.me_url = reverse("me")
         self.change_password_url = reverse("change-password")
         self.logout_url = reverse("logout")
+        self.oauth_complete_url = reverse("oauth-complete")
 
     def authenticate(self, email="existing@example.com", password="SecurePass@123"):
         response = self.client.post(
@@ -160,6 +166,42 @@ class AccountsAuthTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["detail"], "Refresh token is required.")
+
+    @override_settings(
+        GOOGLE_OAUTH_CLIENT_ID="google-client-id",
+        GOOGLE_OAUTH_CLIENT_SECRET="google-client-secret",
+        GOOGLE_OAUTH_REDIRECT_URI="http://localhost:8000/api/auth/oauth/google/callback/",
+    )
+    def test_google_oauth_start_returns_authorization_url(self):
+        response = self.client.post(reverse("oauth-start", kwargs={"provider": "google"}), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("authorization_url", response.data)
+        self.assertIn("accounts.google.com", response.data["authorization_url"])
+
+    def test_oauth_complete_returns_tokens_and_user(self):
+        handoff_token = build_oauth_handoff_token(self.user.id)
+        response = self.client.post(
+            self.oauth_complete_url,
+            {"token": handoff_token},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+        self.assertEqual(response.data["user"]["email"], self.user.email)
+
+    @patch("apps.accounts.views.authenticate_provider_callback")
+    def test_oauth_callback_redirects_to_frontend_handoff(self, authenticate_provider_callback):
+        authenticate_provider_callback.return_value = self.user
+        response = self.client.get(
+            reverse("oauth-callback", kwargs={"provider": "google"}),
+            {"code": "sample-code", "state": "sample-state"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn("/auth/callback?token=", response.url)
 
 
 class AccountsTokenClaimTests(APITestCase):
