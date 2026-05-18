@@ -4,6 +4,7 @@ import {
   changeCurrentPassword,
   completeOAuthLogin,
   fetchCurrentUser,
+  loginWithFirebaseGoogle,
   loginUser,
   logoutUser,
   registerUser,
@@ -164,6 +165,21 @@ export function AuthProvider({ children }) {
         }
 
         const response = await completeOAuthLogin({ token, remember });
+        setUser(response.user);
+        return response.user;
+      },
+      async signInWithGoogle({ remember = true } = {}) {
+        if (FRONTEND_ONLY_MODE) {
+          const mockUser = buildMockUser({
+            name: "Google Demo User",
+            email: "google.demo@ledger.local",
+          });
+          writeMockUser(mockUser);
+          setUser(mockUser);
+          return mockUser;
+        }
+
+        const response = await loginWithFirebaseGoogle({ remember });
         setUser(response.user);
         return response.user;
       },

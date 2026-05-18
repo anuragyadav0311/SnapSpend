@@ -205,6 +205,8 @@ VITE_FRONTEND_ONLY=true
 | `GOOGLE_OAUTH_CLIENT_ID` | empty | Google OAuth client ID for Sign in with Google |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | empty | Google OAuth client secret |
 | `GOOGLE_OAUTH_REDIRECT_URI` | empty | Backend callback URI registered with Google, for example `http://localhost:8000/api/auth/oauth/google/callback/` |
+| `FIREBASE_PROJECT_ID` | empty | Firebase project ID used to verify Google sign-in ID tokens |
+| `FIREBASE_PROJECT_NUMBER` | empty | Optional Firebase project number accepted as a token audience |
 | `APPLE_OAUTH_CLIENT_ID` | empty | Apple Services ID / client ID |
 | `APPLE_OAUTH_TEAM_ID` | empty | Apple Developer team ID |
 | `APPLE_OAUTH_KEY_ID` | empty | Apple Sign in key ID |
@@ -220,12 +222,19 @@ VITE_FRONTEND_ONLY=true
 | --- | --- | --- |
 | `VITE_API_URL` | `http://localhost:8000/api` | Backend API base URL |
 | `VITE_FRONTEND_ONLY` | `false` | Set to `true` for offline demo mode |
+| `VITE_FIREBASE_API_KEY` | empty | Firebase web app API key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | empty | Firebase auth domain, for example `your-project.firebaseapp.com` |
+| `VITE_FIREBASE_PROJECT_ID` | empty | Firebase project ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | empty | Firebase storage bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | empty | Firebase messaging sender ID |
+| `VITE_FIREBASE_APP_ID` | empty | Firebase web app ID |
 
 ## Main API Endpoints
 
 ### Authentication
 - `POST /api/auth/register/`
 - `POST /api/auth/login/`
+- `POST /api/auth/firebase/google/`
 - `POST /api/auth/refresh/`
 - `GET /api/auth/me/`
 - `PUT /api/auth/me/`

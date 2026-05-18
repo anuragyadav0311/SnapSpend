@@ -9,6 +9,11 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from apps.accounts.firebase_auth import (
+    FirebaseAuthError,
+    FirebaseConfigurationError,
+    authenticate_firebase_google_user,
+)
 from apps.accounts.oauth import (
     OAuthConfigurationError,
     OAuthError,
@@ -145,6 +150,29 @@ class OAuthCompleteView(APIView):
         try:
             user = redeem_oauth_handoff_token(token)
         except OAuthError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                **issue_tokens_for_user(user),
+                "user": UserSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class FirebaseGoogleAuthView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        id_token = request.data.get("id_token", "")
+
+        try:
+            user = authenticate_firebase_google_user(id_token)
+        except FirebaseConfigurationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except FirebaseAuthError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(

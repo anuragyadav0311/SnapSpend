@@ -3,6 +3,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.accounts.views import (
     ChangePasswordView,
+    FirebaseGoogleAuthView,
     LoginView,
     LogoutView,
     MeView,
@@ -18,6 +19,7 @@ urlpatterns = [
     path("oauth/<str:provider>/start/", OAuthStartView.as_view(), name="oauth-start"),
     path("oauth/<str:provider>/callback/", OAuthCallbackView.as_view(), name="oauth-callback"),
     path("oauth/complete/", OAuthCompleteView.as_view(), name="oauth-complete"),
+    path("firebase/google/", FirebaseGoogleAuthView.as_view(), name="firebase-google-auth"),
     path("refresh/", TokenRefreshView.as_view(), name="token-refresh"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("me/", MeView.as_view(), name="me"),

@@ -1,4 +1,5 @@
 import { api, getApiErrorMessage } from "./api";
+import { getGoogleFirebaseIdToken } from "./firebase";
 import { clearTokens, getRefreshToken, setTokens } from "./tokenStorage";
 
 export async function registerUser(payload) {
@@ -22,6 +23,20 @@ export async function completeOAuthLogin({ token, remember = true }) {
     return response.data;
   } catch (error) {
     throw new Error(getApiErrorMessage(error, "Unable to complete sign-in right now."));
+  }
+}
+
+export async function loginWithFirebaseGoogle({ remember = true } = {}) {
+  try {
+    const idToken = await getGoogleFirebaseIdToken();
+    const response = await api.post("/auth/firebase/google/", { id_token: idToken });
+    setTokens(response.data, remember);
+    return response.data;
+  } catch (error) {
+    if (!error?.response && error?.message) {
+      throw new Error(error.message);
+    }
+    throw new Error(getApiErrorMessage(error, "Unable to continue with Google right now."));
   }
 }
 

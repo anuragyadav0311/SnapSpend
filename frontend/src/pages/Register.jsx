@@ -788,7 +788,7 @@ export default function Register() {
   const submitTimeoutRef = useRef(null);
   const toastTimeoutRef = useRef(null);
   const navigate = useNavigate();
-  const { beginOAuth, register } = useAuth();
+  const { beginOAuth, register, signInWithGoogle } = useAuth();
 
   const { theme } = useTheme();
 
@@ -943,6 +943,12 @@ export default function Register() {
     setSubmitError("");
 
     try {
+      if (provider === "google") {
+        await signInWithGoogle({ remember: true });
+        triggerToast();
+        return;
+      }
+
       const { authorization_url: authorizationUrl } = await beginOAuth(provider);
       if (!authorizationUrl) {
         throw new Error(`Unable to start ${provider === "apple" ? "Apple" : "Google"} sign-in right now.`);
