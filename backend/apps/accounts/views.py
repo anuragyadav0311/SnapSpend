@@ -1,10 +1,24 @@
+import json
+
+from django.http import HttpResponseRedirect
 from rest_framework import generics, permissions, status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from apps.accounts.oauth import (
+    OAuthConfigurationError,
+    OAuthError,
+    authenticate_provider_callback,
+    build_frontend_callback_url,
+    build_oauth_handoff_token,
+    build_provider_authorization_url,
+    issue_tokens_for_user,
+    redeem_oauth_handoff_token,
+)
 from apps.accounts.serializers import (
     ChangePasswordSerializer,
     CustomTokenObtainPairSerializer,
@@ -64,3 +78,79 @@ class LogoutView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response({"detail": "Logged out successfully."}, status=status.HTTP_200_OK)
+
+
+class OAuthStartView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request, provider):
+        try:
+            authorization_url = build_provider_authorization_url(provider)
+        except OAuthConfigurationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except OAuthError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"authorization_url": authorization_url}, status=status.HTTP_200_OK)
+
+
+class OAuthCallbackView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+
+    def get(self, request, provider):
+        return self._handle_callback(request, provider)
+
+    def post(self, request, provider):
+        return self._handle_callback(request, provider)
+
+    def _handle_callback(self, request, provider):
+        payload = request.data if request.method == "POST" else request.query_params
+        provider_error = payload.get("error")
+        if provider_error:
+            return HttpResponseRedirect(build_frontend_callback_url(error=str(provider_error)))
+
+        raw_user = payload.get("user")
+        user_payload = None
+        if raw_user:
+            try:
+                user_payload = json.loads(raw_user) if isinstance(raw_user, str) else raw_user
+            except json.JSONDecodeError:
+                user_payload = None
+
+        try:
+            user = authenticate_provider_callback(
+                provider=provider,
+                code=payload.get("code", ""),
+                state=payload.get("state", ""),
+                user_payload=user_payload,
+            )
+            handoff_token = build_oauth_handoff_token(user.id)
+            return HttpResponseRedirect(build_frontend_callback_url(token=handoff_token))
+        except OAuthError as exc:
+            return HttpResponseRedirect(build_frontend_callback_url(error=str(exc)))
+
+
+class OAuthCompleteView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        token = request.data.get("token", "")
+        if not token:
+            return Response({"detail": "OAuth completion token is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = redeem_oauth_handoff_token(token)
+        except OAuthError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                **issue_tokens_for_user(user),
+                "user": UserSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
+        )

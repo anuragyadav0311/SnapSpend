@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Insights from "./pages/Insights";
 import Login from "./pages/Login";
 import MainLayout from "./pages/MainLayout";
+import OAuthCallback from "./pages/OAuthCallback";
 import Profile from "./pages/Profile";
 import Register from "./pages/Register";
 import Transactions from "./pages/Transactions";
@@ -14,7 +15,11 @@ import { ThemeProvider } from "./context/ThemeContext";
 
 function AppRoutes() {
   const { pathname } = useLocation();
-  const showAuthThemeToggle = pathname === "/" || pathname === "/login" || pathname === "/register";
+  const showAuthThemeToggle =
+    pathname === "/" ||
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/auth/callback";
 
   return (
     <>
@@ -37,6 +42,7 @@ function AppRoutes() {
             </PublicOnlyRoute>
           }
         />
+        <Route path="/auth/callback" element={<OAuthCallback />} />
 
         <Route element={<ProtectedRoute />}>
           <Route element={<MainLayout />}>

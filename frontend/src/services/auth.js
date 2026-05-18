@@ -6,6 +6,25 @@ export async function registerUser(payload) {
   return response.data;
 }
 
+export async function startOAuth(provider) {
+  try {
+    const response = await api.post(`/auth/oauth/${provider}/start/`);
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, `Unable to start ${provider} sign-in right now.`));
+  }
+}
+
+export async function completeOAuthLogin({ token, remember = true }) {
+  try {
+    const response = await api.post("/auth/oauth/complete/", { token });
+    setTokens(response.data, remember);
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, "Unable to complete sign-in right now."));
+  }
+}
+
 export async function loginUser({ email, password, remember }) {
   try {
     const response = await api.post("/auth/login/", { email, password });
