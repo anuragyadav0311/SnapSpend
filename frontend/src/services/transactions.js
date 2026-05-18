@@ -180,6 +180,25 @@ export async function verifyTransaction(token, imageFile) {
   }
 }
 
+export async function verifyExistingTransaction(id, imageFile, anomalyReason = "") {
+  if (FRONTEND_ONLY_MODE) {
+    throw new Error("Verification requires the live backend.");
+  }
+
+  const formData = new FormData();
+  formData.append("image", imageFile);
+  if (anomalyReason) {
+    formData.append("anomaly_reason", anomalyReason);
+  }
+
+  try {
+    const response = await api.post(`/transactions/${id}/verify-ocr/`, formData);
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, "Unable to verify the transaction."));
+  }
+}
+
 export async function scanBillPhoto(file) {
   if (FRONTEND_ONLY_MODE) {
     throw new Error("Bill scanning needs the live backend.");
