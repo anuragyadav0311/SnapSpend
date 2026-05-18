@@ -177,6 +177,30 @@ class TransactionApiTests(APITestCase):
         self.assertEqual(draft.category_id, subscriptions.id)
         self.assertEqual(draft.title, "NETFLIX")
 
+    def test_parse_bill_text_uses_nearby_total_label_for_split_amount_line(self):
+        subscriptions = Category.objects.create(name="Subscriptions", type="expense", user=None)
+        draft = parse_bill_text(
+            """
+            NETFLIX
+            Invoice Number:
+            IN-2026-984721A
+            Invoice Date:
+            01 May 2026
+            SOLD TO:
+            Anurag Yadav
+            649.00
+            TOTAL AMOUNT PAID (INR)
+            Payment Status:
+            SUCCESSFUL
+            """,
+            [self.default_expense, subscriptions],
+        )
+
+        self.assertEqual(draft.amount, Decimal("649.00"))
+        self.assertEqual(draft.date, "2026-05-01")
+        self.assertEqual(draft.category_id, subscriptions.id)
+        self.assertEqual(draft.title, "NETFLIX")
+
     @patch("apps.transactions.views.extract_expense_from_bill")
     def test_scan_bill_returns_ocr_draft(self, mock_extract):
         mock_extract.return_value = BillDraft(
@@ -230,6 +254,46 @@ class TransactionApiTests(APITestCase):
         anomaly_ids = {item["id"] for item in response.data["results"]}
         self.assertIn(unusual.id, anomaly_ids)
         self.assertEqual(response.data["total_checked"], 13)
+
+    def test_anomalies_endpoint_excludes_ocr_verified_transactions(self):
+        for index in range(12):
+            Transaction.objects.create(
+                user=self.user,
+                type="expense",
+                amount=Decimal("450.00") + Decimal(index),
+                category=self.default_expense,
+                title=f"Regular grocery {index}",
+                date=date(2026, 5, min(index + 1, 28)),
+            )
+        unusual = Transaction.objects.create(
+            user=self.user,
+            type="expense",
+            amount=Decimal("25000.00"),
+            category=self.default_expense,
+            title="Unexpected appliance repair",
+            date=date(2026, 5, 15),
+        )
+        verification = TransactionVerification.objects.create(
+            user=self.user,
+            proposed={
+                "transaction_id": unusual.id,
+                "type": "expense",
+                "amount": 25000.0,
+                "category": self.default_expense.id,
+                "category_name": self.default_expense.name,
+                "title": unusual.title,
+                "note": "",
+                "date": unusual.date.isoformat(),
+            },
+            anomaly_reason="Unusual amount.",
+        )
+        verification.mark_verified("Unexpected appliance repair\nTotal 25000.00")
+
+        response = self.client.get("/api/transactions/anomalies/?contamination=0.15")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        anomaly_ids = {item["id"] for item in response.data["results"]}
+        self.assertNotIn(unusual.id, anomaly_ids)
 
     def test_anomalies_endpoint_validates_contamination(self):
         response = self.client.get("/api/transactions/anomalies/?contamination=0.75")
@@ -324,3 +388,39 @@ class TransactionApiTests(APITestCase):
         self.assertEqual(response.data["amount"], "649.00")
         self.assertEqual(response.data["date"], "2026-05-01")
         self.assertTrue(Transaction.objects.filter(title="Netflix", amount=Decimal("649.00")).exists())
+
+    @patch("apps.transactions.views.extract_expense_from_bill")
+    def test_verify_existing_flagged_transaction_with_ocr(self, mock_extract):
+        transaction = Transaction.objects.create(
+            user=self.user,
+            type="expense",
+            amount=Decimal("25000.00"),
+            category=self.default_expense,
+            title="Unexpected appliance repair",
+            date=date(2026, 5, 15),
+        )
+        mock_extract.return_value = BillDraft(
+            amount=Decimal("25000.00"),
+            date="2026-05-15",
+            title="Unexpected appliance repair",
+            category_id=self.default_expense.id,
+            category_name=self.default_expense.name,
+            note="Scanned from bill photo.",
+            raw_text="Unexpected appliance repair\nDate 15/05/2026\nTotal 25000.00",
+        )
+
+        image = SimpleUploadedFile("repair.jpg", b"fake-image", content_type="image/jpeg")
+        response = self.client.post(
+            f"/api/transactions/{transaction.id}/verify-ocr/",
+            {"image": image, "anomaly_reason": "Unusual amount."},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], transaction.id)
+        verification = next(
+            item
+            for item in TransactionVerification.objects.filter(user=self.user)
+            if item.proposed.get("transaction_id") == transaction.id
+        )
+        self.assertTrue(verification.is_verified)

@@ -26,6 +26,10 @@ NUMBER_TOKEN_RE = re.compile(r"[A-Za-z0-9.,]+")
 DATE_LIKE_RE = re.compile(
     r"\b(?:20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})\b"
 )
+TEXT_DATE_LIKE_RE = re.compile(
+    r"\b(?:\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{2,4})\b",
+    re.IGNORECASE,
+)
 
 MONTHS = {
     "jan": 1,
@@ -255,18 +259,25 @@ def infer_amount(lines: list[str]) -> Decimal | None:
             continue
 
         money_context = has_money_context(line)
-        if not money_context and looks_like_reference_or_date_line(line):
+        surrounding_context = nearby_amount_context(lines, index)
+        amount_context = money_context or surrounding_context
+        if not amount_context and looks_like_reference_or_date_line(line):
             continue
 
         priority = 0
+        scoring_context = " ".join(
+            lines[position].lower()
+            for position in (index - 1, index, index + 1)
+            if 0 <= position < len(lines)
+        )
         if any(
-            token in lowered
+            token in scoring_context
             for token in ("grand total", "amount payable", "net payable", "balance due", "bill amount")
         ):
             priority = 5
-        elif re.search(r"\btotal\b", lowered):
+        elif re.search(r"\btotal\b", scoring_context):
             priority = 4
-        elif any(token in lowered for token in ("paid", "card", "cash", "upi")):
+        elif any(token in scoring_context for token in ("paid", "card", "cash", "upi")):
             priority = 2
 
         if any(
@@ -274,10 +285,10 @@ def infer_amount(lines: list[str]) -> Decimal | None:
             for token in ("subtotal", "sub total", "tax", "cgst", "sgst", "igst", "change", "qty", "rate")
         ):
             priority -= 2
-        if not money_context:
+        if not amount_context:
             priority -= 3
 
-        for value in extract_line_amounts(line, money_context=money_context):
+        for value in extract_line_amounts(line, money_context=amount_context):
             candidates.append((priority, amount_plausibility_score(value), value, index))
 
     if not candidates:
@@ -333,12 +344,27 @@ def looks_like_reference_or_date_line(line: str) -> bool:
     lowered = line.lower()
     if any(token in lowered for token in ("invoice", "order", "reference", "receipt", "transaction id")):
         return True
-    if DATE_LIKE_RE.search(line):
+    if DATE_LIKE_RE.search(line) or TEXT_DATE_LIKE_RE.search(line):
         return True
 
     digits = sum(char.isdigit() for char in line)
     separators = sum(char in "-/:_#" for char in line)
     return digits >= 4 and separators >= 1
+
+
+def nearby_amount_context(lines: list[str], index: int) -> bool:
+    current_amounts = extract_line_amounts(lines[index], money_context=False)
+    if not current_amounts:
+        return False
+
+    for neighbor_index in (index - 1, index + 1):
+        if not 0 <= neighbor_index < len(lines):
+            continue
+        neighbor = lines[neighbor_index]
+        if has_money_context(neighbor) and not extract_line_amounts(neighbor, money_context=True):
+            return True
+
+    return False
 
 
 def extract_line_amounts(line: str, money_context: bool) -> list[Decimal]:

@@ -40,6 +40,64 @@ def dates_match(ocr_dates, proposed_date) -> bool:
     return expected in ocr_dates
 
 
+def proposed_from_transaction(transaction):
+    category = transaction.category
+    return {
+        "transaction_id": transaction.id,
+        "type": str(transaction.type),
+        "amount": float(transaction.amount),
+        "category": category.id if category else None,
+        "category_name": category.name if category else "Uncategorized",
+        "title": transaction.title,
+        "note": transaction.note,
+        "date": str(transaction.date),
+    }
+
+
+def verified_transaction_ids_for(user) -> set[int]:
+    verified_ids = set()
+    verifications = TransactionVerification.objects.filter(user=user, is_verified=True).values_list("proposed", flat=True)
+    for proposed in verifications:
+        try:
+            transaction_id = int(proposed.get("transaction_id"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        verified_ids.add(transaction_id)
+    return verified_ids
+
+
+def compare_bill_to_proposed(image, categories, proposed):
+    draft = extract_expense_from_bill(image, categories)
+    ocr_amounts = extract_amounts_from_text(draft.raw_text)
+    if draft.amount is not None:
+        normalized_draft_amount = draft.amount.quantize(Decimal("0.01"))
+        if normalized_draft_amount not in ocr_amounts:
+            ocr_amounts.append(normalized_draft_amount)
+
+    ocr_dates = extract_dates(draft.raw_text)
+    try:
+        draft_date = date.fromisoformat(draft.date)
+    except (TypeError, ValueError):
+        draft_date = None
+    if draft_date and draft_date not in ocr_dates:
+        ocr_dates.append(draft_date)
+
+    amount_ok = amounts_match(ocr_amounts, proposed.get("amount"))
+    date_ok = dates_match(ocr_dates, proposed.get("date"))
+    category_ok = draft.category_name.lower() == proposed.get("category_name", "").lower()
+
+    proposed_title = proposed.get("title", "").lower().strip()
+    title_ok = proposed_title and proposed_title in draft.raw_text.lower()
+    verified = (amount_ok and date_ok) or (amount_ok and (category_ok or title_ok))
+
+    return draft, verified, {
+        "amount": amount_ok,
+        "date": date_ok,
+        "category": category_ok,
+        "title": title_ok,
+    }
+
+
 class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -328,6 +386,72 @@ class TransactionViewSet(viewsets.ModelViewSet):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    @action(detail=True, methods=["post"], url_path="verify-ocr")
+    def verify_existing(self, request, pk=None):
+        transaction = self.get_object()
+        if transaction.type != "expense":
+            raise ValidationError({"transaction": "Only expense transactions can be verified with a bill photo."})
+
+        image = request.FILES.get("image")
+        if image is None:
+            raise ValidationError({"image": "Please upload a bill photo for verification."})
+
+        proposed = proposed_from_transaction(transaction)
+        categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense").order_by("name")
+
+        try:
+            draft, verified, matches = compare_bill_to_proposed(image, list(categories), proposed)
+        except BillOcrError as exc:
+            raise ValidationError({"image": str(exc)})
+
+        verification = next(
+            (
+                item
+                for item in TransactionVerification.objects.filter(user=request.user)
+                if str(item.proposed.get("transaction_id")) == str(transaction.id)
+            ),
+            None,
+        )
+        if verification is None:
+            verification = TransactionVerification.objects.create(
+                user=request.user,
+                proposed=proposed,
+                anomaly_reason=request.data.get("anomaly_reason", ""),
+            )
+        verification.proposed = proposed
+        verification.ocr_raw_text = draft.raw_text
+        if request.data.get("anomaly_reason"):
+            verification.anomaly_reason = request.data.get("anomaly_reason")
+        verification.save()
+
+        if verified:
+            verification.mark_verified(ocr_text=draft.raw_text)
+            return Response(
+                {
+                    **TransactionSerializer(transaction, context={"request": request}).data,
+                    "verification": TransactionVerificationSerializer(verification).data,
+                    "matches": matches,
+                    "detail": "Transaction verified with OCR.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {
+                "detail": "OCR did not match the selected transaction.",
+                "proposed": proposed,
+                "ocr": {
+                    "amount": f"{draft.amount:.2f}" if draft.amount is not None else None,
+                    "date": draft.date,
+                    "category_name": draft.category_name,
+                    "title": draft.title,
+                    "raw_text": draft.raw_text,
+                },
+                "matches": matches,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     @action(detail=False, methods=["get"], url_path="anomalies")
     def anomalies(self, request):
         try:
@@ -345,6 +469,10 @@ class TransactionViewSet(viewsets.ModelViewSet):
             transaction
             for transaction in transactions
             if result_map[transaction.id].is_anomaly
+        ]
+        verified_ids = verified_transaction_ids_for(request.user)
+        anomalous_transactions = [
+            transaction for transaction in anomalous_transactions if transaction.id not in verified_ids
         ]
         anomalous_transactions.sort(
             key=lambda transaction: result_map[transaction.id].anomaly_score,

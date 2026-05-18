@@ -12,6 +12,7 @@ import {
   listTransactions,
   scanBillPhoto,
   updateTransaction,
+  verifyExistingTransaction,
   verifyTransaction,
 } from "../services/transactions";
 
@@ -819,6 +820,26 @@ const STYLES = `
   animation: pulseGlow 3s ease-in-out infinite;
 }
 
+.anomaly-verify-btn {
+  border: 1px solid rgba(184, 112, 112, 0.3);
+  background: rgba(184, 112, 112, 0.1);
+  color: var(--rose);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-family: 'Figtree', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.anomaly-verify-btn:hover {
+  background: rgba(184, 112, 112, 0.18);
+  border-color: var(--rose);
+}
+
 .anomaly-banner {
   padding: 14px 18px;
   border-radius: 14px;
@@ -1358,6 +1379,28 @@ export default function Transactions() {
     }
   };
 
+  const openExistingAnomalyModal = (transaction) => {
+    const anomalyReason = anomalyReasonMap[transaction.id] || "Suspicious transaction";
+    setAnomalyModal({
+      mode: "existing",
+      detail: "Upload a bill photo to verify this flagged expense with OCR.",
+      transactionId: transaction.id,
+      verification: {
+        anomaly_reason: anomalyReason,
+        proposed: {
+          title: transaction.title,
+          amount: transaction.amountValue,
+          category: transaction.categoryId || null,
+          category_name: transaction.category,
+          date: transaction.date,
+        },
+      },
+    });
+    setVerifyFile(null);
+    setVerifyStatus("");
+    setVerifyStatusType("");
+  };
+
   const handleVerifySubmit = async () => {
     if (!anomalyModal || !verifyFile) return;
 
@@ -1366,11 +1409,21 @@ export default function Transactions() {
     setVerifyStatusType("");
 
     try {
-      const result = await verifyTransaction(anomalyModal.verification.token, verifyFile);
-      // Verification successful — transaction was created
-      const mappedTransaction = mapTransaction(result);
-      setTransactions((current) => [mappedTransaction, ...current]);
-      setVerifyStatus("Verified! Transaction saved successfully.");
+      if (anomalyModal.mode === "existing") {
+        await verifyExistingTransaction(
+          anomalyModal.transactionId,
+          verifyFile,
+          anomalyModal.verification.anomaly_reason,
+        );
+        setAnomalies((current) => current.filter((item) => item.id !== anomalyModal.transactionId));
+        setAnomalyCount((current) => Math.max(current - 1, 0));
+        setVerifyStatus("Verified! This transaction is now cleared.");
+      } else {
+        const result = await verifyTransaction(anomalyModal.verification.token, verifyFile);
+        const mappedTransaction = mapTransaction(result);
+        setTransactions((current) => [mappedTransaction, ...current]);
+        setVerifyStatus("Verified! Transaction saved successfully.");
+      }
       setVerifyStatusType("success");
       setTimeout(() => closeAnomalyModal(), 1500);
     } catch (error) {
@@ -1636,14 +1689,25 @@ export default function Transactions() {
                         <span className="txn-card-pill">{transaction.category}</span>
                         {transaction.note && <span>{transaction.note}</span>}
                         {anomalyIdSet.has(transaction.id) && (
-                          <span className="anomaly-badge" title={anomalyReasonMap[transaction.id] || "Suspicious transaction"}>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                              <line x1="12" y1="9" x2="12" y2="13" />
-                              <line x1="12" y1="17" x2="12.01" y2="17" />
-                            </svg>
-                            ML Flagged
-                          </span>
+                          <>
+                            <span className="anomaly-badge" title={anomalyReasonMap[transaction.id] || "Suspicious transaction"}>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                <line x1="12" y1="9" x2="12" y2="13" />
+                                <line x1="12" y1="17" x2="12.01" y2="17" />
+                              </svg>
+                              ML Flagged
+                            </span>
+                            {transaction.kind === "expense" && (
+                              <button
+                                className="anomaly-verify-btn"
+                                type="button"
+                                onClick={() => openExistingAnomalyModal(transaction)}
+                              >
+                                Verify OCR
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                       <div className="txn-card-actions">
@@ -1702,7 +1766,9 @@ export default function Transactions() {
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             </div>
-            <div className="anomaly-title">Unusual Transaction Detected</div>
+            <div className="anomaly-title">
+              {anomalyModal.mode === "existing" ? "Verify Flagged Expense" : "Unusual Transaction Detected"}
+            </div>
             <div className="anomaly-desc">{anomalyModal.detail}</div>
 
             <div className="anomaly-reason">
@@ -1761,7 +1827,7 @@ export default function Transactions() {
                 disabled={!verifyFile || verifying}
                 onClick={handleVerifySubmit}
               >
-                {verifying ? "Verifying..." : "Verify & Save"}
+                {verifying ? "Verifying..." : anomalyModal.mode === "existing" ? "Verify OCR" : "Verify & Save"}
               </button>
             </div>
           </div>
