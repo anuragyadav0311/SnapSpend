@@ -27,6 +27,7 @@ class AccountsAuthTests(APITestCase):
         self.change_password_url = reverse("change-password")
         self.logout_url = reverse("logout")
         self.oauth_complete_url = reverse("oauth-complete")
+        self.firebase_google_url = reverse("firebase-google-auth")
 
     def authenticate(self, email="existing@example.com", password="SecurePass@123"):
         response = self.client.post(
@@ -202,6 +203,22 @@ class AccountsAuthTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn("/auth/callback?token=", response.url)
+
+    @patch("apps.accounts.views.authenticate_firebase_google_user")
+    def test_firebase_google_auth_returns_tokens_and_user(self, authenticate_firebase_google_user):
+        authenticate_firebase_google_user.return_value = self.user
+
+        response = self.client.post(
+            self.firebase_google_url,
+            {"id_token": "firebase-id-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+        self.assertEqual(response.data["user"]["email"], self.user.email)
+        authenticate_firebase_google_user.assert_called_once_with("firebase-id-token")
 
 
 class AccountsTokenClaimTests(APITestCase):
