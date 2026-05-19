@@ -2,18 +2,17 @@ import axios from "axios";
 import { clearTokens, getAccessToken, getRefreshToken, updateAccessToken } from "./tokenStorage";
 
 function normalizeApiBaseUrl(rawUrl) {
-  const fallbackUrl = "http://localhost:8000/api";
   const trimmedUrl = rawUrl?.trim();
 
   if (!trimmedUrl) {
-    return fallbackUrl;
+    return "";
   }
 
   const normalizedUrl = trimmedUrl.replace(/\/+$/, "");
   return normalizedUrl.endsWith("/api") ? normalizedUrl : `${normalizedUrl}/api`;
 }
 
-const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
