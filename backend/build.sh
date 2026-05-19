@@ -7,6 +7,9 @@ set -o errexit  # Exit on any error
 echo "==> Installing dependencies..."
 pip install -r requirements.txt
 
+echo "==> Running deployment checks..."
+python manage.py check --deploy
+
 echo "==> Collecting static files..."
 python manage.py collectstatic --noinput
 

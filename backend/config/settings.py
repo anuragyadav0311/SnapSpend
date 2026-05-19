@@ -1,6 +1,7 @@
 from datetime import timedelta
 from pathlib import Path
 
+import dj_database_url
 from decouple import Csv, config
 
 
@@ -22,10 +23,16 @@ def env_list(name: str, default: str) -> list[str]:
 
 SECRET_KEY = config("SECRET_KEY", default="change-me")
 DEBUG = env_bool("DEBUG", True)
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="127.0.0.1,localhost,testserver", cast=Csv())
+ALLOWED_HOSTS = config(
+    "ALLOWED_HOSTS",
+    default="127.0.0.1,localhost,testserver" if DEBUG else "",
+    cast=Csv(),
+)
 
 if not DEBUG and SECRET_KEY == "change-me":
     raise ValueError("Set a strong SECRET_KEY in production.")
+if not DEBUG and not ALLOWED_HOSTS:
+    raise ValueError("Set ALLOWED_HOSTS in production.")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -74,8 +81,20 @@ TEMPLATES = [
 ]
 
 DATABASE_ENGINE = config("DATABASE_ENGINE", default="postgres").strip().lower()
+DATABASE_URL = config("DATABASE_URL", default="").strip()
+POSTGRES_CONN_MAX_AGE = config("POSTGRES_CONN_MAX_AGE", default=60, cast=int)
+POSTGRES_SSL_REQUIRE = env_bool("POSTGRES_SSL_REQUIRE", not DEBUG)
 
-if DATABASE_ENGINE == "sqlite":
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=POSTGRES_CONN_MAX_AGE,
+            ssl_require=POSTGRES_SSL_REQUIRE,
+        )
+    }
+    DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+elif DATABASE_ENGINE == "sqlite":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -91,7 +110,8 @@ else:
             "PASSWORD": config("POSTGRES_PASSWORD", default="postgres"),
             "HOST": config("POSTGRES_HOST", default="localhost"),
             "PORT": config("POSTGRES_PORT", default="5432"),
-            "CONN_MAX_AGE": config("POSTGRES_CONN_MAX_AGE", default=60, cast=int),
+            "CONN_MAX_AGE": POSTGRES_CONN_MAX_AGE,
+            "CONN_HEALTH_CHECKS": True,
         }
     }
 
@@ -111,15 +131,25 @@ STATIC_URL = "/static/"
 MEDIA_URL = "/media/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_ROOT = BASE_DIR / "media"
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 
 if not DEBUG:
     MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
-    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    STORAGES["staticfiles"] = {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
 
-FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173" if DEBUG else "")
 FRONTEND_URLS = env_list("FRONTEND_URLS", default=FRONTEND_URL)
 CORS_ALLOWED_ORIGINS = FRONTEND_URLS
 CSRF_TRUSTED_ORIGINS = FRONTEND_URLS
@@ -163,7 +193,43 @@ ML_ANOMALY_CACHE_DIR = str(BASE_DIR / config("ML_ANOMALY_CACHE_DIR", default="ml
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = env_bool("CSRF_COOKIE_HTTPONLY", True)
+SESSION_COOKIE_SAMESITE = config("SESSION_COOKIE_SAMESITE", default="Lax")
+CSRF_COOKIE_SAMESITE = config("CSRF_COOKIE_SAMESITE", default="Lax")
 SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", not DEBUG)
-SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=0 if DEBUG else 3600, cast=int)
+SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=0 if DEBUG else 31536000, cast=int)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
 SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", False)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = config("SECURE_REFERRER_POLICY", default="same-origin")
+X_FRAME_OPTIONS = "DENY"
+
+DJANGO_LOG_LEVEL = config("DJANGO_LOG_LEVEL", default="INFO").upper()
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {
+            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+        }
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": DJANGO_LOG_LEVEL,
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": DJANGO_LOG_LEVEL,
+            "propagate": False,
+        }
+    },
+}

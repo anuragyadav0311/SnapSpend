@@ -143,6 +143,15 @@ POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 ```
 
+For **cloud PostgreSQL** on platforms like Render, Neon, Supabase, or Railway, you can use a single connection string instead:
+
+```env
+DATABASE_URL=postgresql://user:password@host:5432/database?sslmode=require
+DEBUG=False
+ALLOWED_HOSTS=your-backend-domain.onrender.com
+FRONTEND_URLS=https://your-frontend-domain.vercel.app
+```
+
 Then run migrations and start the server:
 
 ```bash
@@ -193,6 +202,7 @@ VITE_FRONTEND_ONLY=true
 | `SECRET_KEY` | `change-me` | Django secret key (change in production) |
 | `DEBUG` | `True` | Django debug mode |
 | `ALLOWED_HOSTS` | `127.0.0.1,localhost` | Comma-separated allowed hosts |
+| `DATABASE_URL` | empty | Full database connection string. Takes priority over the split PostgreSQL variables below. |
 | `DATABASE_ENGINE` | `postgres` | `postgres` or `sqlite` |
 | `SQLITE_NAME` | `db.sqlite3` | SQLite file name (when using sqlite engine) |
 | `POSTGRES_DB` | `expense_tracker` | PostgreSQL database name |
@@ -200,6 +210,7 @@ VITE_FRONTEND_ONLY=true
 | `POSTGRES_PASSWORD` | `postgres` | PostgreSQL password |
 | `POSTGRES_HOST` | `localhost` | PostgreSQL host |
 | `POSTGRES_PORT` | `5432` | PostgreSQL port |
+| `POSTGRES_SSL_REQUIRE` | `False` in debug, `True` in production | Force SSL for PostgreSQL connections |
 | `FRONTEND_URL` | `http://localhost:5173` | Frontend URL for CORS |
 | `FRONTEND_URLS` | same as above | Comma-separated frontend URLs for CORS |
 | `GOOGLE_OAUTH_CLIENT_ID` | empty | Google OAuth client ID for Sign in with Google |
@@ -213,6 +224,7 @@ VITE_FRONTEND_ONLY=true
 | `APPLE_OAUTH_PRIVATE_KEY` | empty | Apple private key PEM, with newlines escaped as `\\n` in `.env` |
 | `APPLE_OAUTH_REDIRECT_URI` | empty | Backend callback URI registered with Apple |
 | `OAUTH_FRONTEND_CALLBACK_PATH` | `/auth/callback` | Frontend route that completes provider sign-in |
+| `DJANGO_LOG_LEVEL` | `INFO` | Root/Django console log level |
 
 > Note: Apple requires an HTTPS redirect URI on a real domain for web Sign in with Apple. `localhost` and raw IP callback URLs are not accepted by Apple.
 
@@ -228,6 +240,10 @@ VITE_FRONTEND_ONLY=true
 | `VITE_FIREBASE_STORAGE_BUCKET` | empty | Firebase storage bucket |
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | empty | Firebase messaging sender ID |
 | `VITE_FIREBASE_APP_ID` | empty | Firebase web app ID |
+
+## Deployment
+
+Use [database/deployment.md](/c:/Projects/Expense_Tracker/expense-tracker/database/deployment.md) for the full production walkthrough. The backend now supports both a `Procfile`-based Gunicorn startup command and a single `DATABASE_URL`, which makes deployment on common PaaS providers much smoother.
 
 ## Main API Endpoints
 
