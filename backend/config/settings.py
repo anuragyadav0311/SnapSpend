@@ -147,8 +147,9 @@ AUTH_USER_MODEL = "accounts.User"
 
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173" if DEBUG else "")
 FRONTEND_URLS = env_list("FRONTEND_URLS", default=FRONTEND_URL)
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWED_ORIGINS = FRONTEND_URLS
+CORS_ALLOWED_ORIGINS = [
+    "https://snap-spend-two.vercel.app",
+]
 CSRF_TRUSTED_ORIGINS = FRONTEND_URLS
 
 GOOGLE_OAUTH_CLIENT_ID = config("GOOGLE_OAUTH_CLIENT_ID", default="")
