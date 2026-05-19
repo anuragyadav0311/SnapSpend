@@ -1,4 +1,4 @@
-# Expense Tracker Team Plan
+# SnapSpend Team Plan
 
 ## Project Summary
 
@@ -71,7 +71,7 @@ The final app is a personal finance platform where a user can:
 ## Final Folder Structure
 
 ```text
-expense-tracker/
+snapspend/
 |-- frontend/
 |   |-- public/
 |   |-- src/

@@ -13,7 +13,7 @@ This directory contains reference sample files showing the expected output forma
 ### Excel (.xlsx) — Expected Format
 - **Sheet name:** `Transactions Report`
 - **Layout:**
-  - Row 1: Report title (e.g., "Expense Tracker — Transactions Report")
+  - Row 1: Report title (e.g., "SnapSpend — Transactions Report")
   - Row 2: Filter info (e.g., "Date Range: May 1, 2026 – May 31, 2026")
   - Row 3: Empty separator
   - Row 4: Summary totals (Total Income, Total Expense, Net Balance)
@@ -25,7 +25,7 @@ This directory contains reference sample files showing the expected output forma
 ### PDF — Expected Format
 - **Page size:** A4 portrait
 - **Layout:**
-  - Header: "Expense Tracker — Transactions Report"
+  - Header: "SnapSpend — Transactions Report"
   - User info block (Name, Email)
   - Date range and filter info
   - Summary section (Total Income, Total Expense, Net Balance)

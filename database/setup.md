@@ -65,7 +65,7 @@ FRONTEND_URL=http://localhost:5173
 ## Option 2: Neon (Recommended for Cloud)
 
 1. Sign up at [neon.tech](https://neon.tech)
-2. Create a new project named `expense-tracker`
+2. Create a new project named `snapspend`
 3. Copy the connection string from the dashboard
 4. Update your `backend/.env`:
 

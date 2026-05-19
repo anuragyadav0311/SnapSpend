@@ -1,6 +1,6 @@
 # QA Test Checklist
 
-Comprehensive testing checklist for the Expense Tracker application. Each section covers a feature area with specific test cases.
+Comprehensive testing checklist for the SnapSpend application. Each section covers a feature area with specific test cases.
 
 ---
 
