@@ -9,7 +9,7 @@ Each team member works on their own feature branch:
 | Member 1 | `feature/backend-auth-core` | Django project, auth, JWT, CORS, settings |
 | Member 2 | `feature/backend-finance` | Transactions, budgets, reports, exports |
 | Member 3 | `feature/frontend-ui` | React pages, components, services, hooks |
-| Member 4 | `feature/database-docs-deploy` | Database docs, seeds, QA, README, deployment |
+| Member 4 | `feature/database-docs-deploy` | Database docs, seeds, QA, README, deployment, ML anomaly detection |
 
 ## Workflow
 
@@ -60,6 +60,7 @@ Use the format: `type(scope): description`
 - `budgets` — Budget features
 - `reports` — Reports and exports
 - `dashboard` — Dashboard UI
+- `ml` — ML anomaly detection, training, model artifacts, and ML docs
 - `database` — Database docs and seeds
 - `deploy` — Deployment configuration
 
@@ -68,6 +69,7 @@ Use the format: `type(scope): description`
 feat(auth): add user registration API
 fix(transactions): handle negative amount validation
 docs(database): add ER diagram and data dictionary
+feat(ml): add anomaly detector training command
 refactor(dashboard): extract chart components
 test(budgets): add budget calculation tests
 chore(deploy): update Render build script
@@ -95,6 +97,8 @@ To minimize merge conflicts, each member owns specific files:
 ### Member 4
 - `README.md`
 - `database/`
+- `backend/ml/`
+- ML-related docs, tests, training scripts, and model artifact changes
 - `.gitignore`
 - `backend/build.sh`
 - `frontend/vercel.json`
