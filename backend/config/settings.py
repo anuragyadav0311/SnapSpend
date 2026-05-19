@@ -1,3 +1,8 @@
+from dotenv import load_dotenv
+
+load_dotenv()
+import os
+import dj_database_url
 from datetime import timedelta
 from pathlib import Path
 
@@ -22,18 +27,11 @@ def env_list(name: str, default: str) -> list[str]:
     return [item.strip() for item in str(raw_value).split(",") if item.strip()]
 
 SECRET_KEY = config("SECRET_KEY", default="change-me")
-DEBUG = env_bool("DEBUG", True)
-ALLOWED_HOSTS = config(
-    "ALLOWED_HOSTS",
-    default="127.0.0.1,localhost,testserver" if DEBUG else "",
-    cast=Csv(),
-)
+DEBUG = os.getenv("DEBUG", "False") == "True"
+ALLOWED_HOSTS = ["*"]
 
 if not DEBUG and SECRET_KEY == "change-me":
     raise ValueError("Set a strong SECRET_KEY in production.")
-if not DEBUG and not ALLOWED_HOSTS:
-    raise ValueError("Set ALLOWED_HOSTS in production.")
-
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -52,8 +50,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -88,9 +87,7 @@ POSTGRES_SSL_REQUIRE = env_bool("POSTGRES_SSL_REQUIRE", not DEBUG)
 if DATABASE_URL:
     DATABASES = {
         "default": dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=POSTGRES_CONN_MAX_AGE,
-            ssl_require=POSTGRES_SSL_REQUIRE,
+            os.getenv("DATABASE_URL")
         )
     }
     DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
@@ -141,7 +138,6 @@ STORAGES = {
 }
 
 if not DEBUG:
-    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
     STORAGES["staticfiles"] = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     }
@@ -151,6 +147,7 @@ AUTH_USER_MODEL = "accounts.User"
 
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173" if DEBUG else "")
 FRONTEND_URLS = env_list("FRONTEND_URLS", default=FRONTEND_URL)
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = FRONTEND_URLS
 CSRF_TRUSTED_ORIGINS = FRONTEND_URLS
 
