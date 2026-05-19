@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Production deployment guide for the Expense Tracker stack.
+Production deployment guide for the SnapSpend stack.
 
 ## Architecture
 
@@ -62,7 +62,7 @@ Recommended Render settings:
 
 | Setting | Value |
 | --- | --- |
-| Name | `expense-tracker-api` |
+| Name | `snapspend-api` |
 | Root Directory | `backend` |
 | Runtime | `Python 3` |
 | Build Command | `./build.sh` |
@@ -74,8 +74,8 @@ Recommended Render settings:
 | --- | --- |
 | `SECRET_KEY` | generated Django secret |
 | `DEBUG` | `False` |
-| `ALLOWED_HOSTS` | `expense-tracker-api.onrender.com` |
-| `FRONTEND_URLS` | `https://expense-tracker.vercel.app` |
+| `ALLOWED_HOSTS` | `snapspend-api.onrender.com` |
+| `FRONTEND_URLS` | `https://snapspend.vercel.app` |
 | `DJANGO_LOG_LEVEL` | `INFO` |
 | `WEB_CONCURRENCY` | `2` |
 
@@ -120,7 +120,7 @@ Set these only if you are enabling those flows in production:
 After deploy, confirm the service is healthy:
 
 ```bash
-curl https://expense-tracker-api.onrender.com/health/
+curl https://snapspend-api.onrender.com/health/
 ```
 
 Expected response:
@@ -144,7 +144,7 @@ Recommended Vercel settings:
 
 | Variable | Example |
 | --- | --- |
-| `VITE_API_URL` | `https://expense-tracker-api.onrender.com` |
+| `VITE_API_URL` | `https://snapspend-api.onrender.com` |
 | `VITE_FRONTEND_ONLY` | `false` |
 | `VITE_FIREBASE_API_KEY` | Firebase web app API key |
 | `VITE_FIREBASE_AUTH_DOMAIN` | `your-project.firebaseapp.com` |

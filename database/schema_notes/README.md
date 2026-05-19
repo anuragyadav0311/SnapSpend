@@ -1,6 +1,6 @@
 # Schema Notes
 
-Database schema documentation for the Expense Tracker project.
+Database schema documentation for the SnapSpend project.
 
 ## Documents
 

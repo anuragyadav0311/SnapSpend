@@ -1,4 +1,4 @@
-# Expense Tracker
+# SnapSpend
 
 A full-stack personal finance tracker built with React, Django REST Framework, and PostgreSQL/SQLite. The app supports authentication, transactions, categories, monthly budgets, dashboard analytics, report exports, and **ML-powered anomaly detection** for suspicious transactions.
 
@@ -58,7 +58,7 @@ A full-stack personal finance tracker built with React, Django REST Framework, a
 ## Project Structure
 
 ```text
-expense-tracker/
+snapspend/
 ├── backend/
 │   ├── apps/
 │   │   ├── accounts/        # User auth, JWT, profile
@@ -105,7 +105,7 @@ sudo apt install tesseract-ocr
 
 ```bash
 git clone <repository-url>
-cd expense-tracker
+cd snapspend
 ```
 
 ### 2. Backend Setup
@@ -243,7 +243,7 @@ VITE_FRONTEND_ONLY=true
 
 ## Deployment
 
-Use [database/deployment.md](/c:/Projects/Expense_Tracker/expense-tracker/database/deployment.md) for the full production walkthrough. The backend now supports both a `Procfile`-based Gunicorn startup command and a single `DATABASE_URL`, which makes deployment on common PaaS providers much smoother.
+Use [database/deployment.md](/c:/Projects/SnapSpend/snapspend/database/deployment.md) for the full production walkthrough. The backend now supports both a `Procfile`-based Gunicorn startup command and a single `DATABASE_URL`, which makes deployment on common PaaS providers much smoother.
 
 ## Main API Endpoints
 
