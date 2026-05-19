@@ -3,8 +3,12 @@ import { getGoogleFirebaseIdToken } from "./firebase";
 import { clearTokens, getRefreshToken, setTokens } from "./tokenStorage";
 
 export async function registerUser(payload) {
-  const response = await api.post("/auth/register/", payload);
-  return response.data;
+  try {
+    const response = await api.post("/auth/register/", payload);
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, "Unable to create your account right now."));
+  }
 }
 
 export async function startOAuth(provider) {
