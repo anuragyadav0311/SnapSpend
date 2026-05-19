@@ -1,4 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { AnimatedCounter } from "../components/SharedComponents";
 import { downloadReport, fetchCategorySummary, fetchMonthlyReport } from "../services/reports";
 import { getBudgetBalance } from "../utils/budgetDisplay";
@@ -18,6 +33,15 @@ const REPORT_FORMAT_OPTIONS = [
   { value: "pdf", label: "PDF" },
 ];
 
+const CATEGORY_CHART_COLORS = [
+  "#b6d5bf",
+  "#e9cc79",
+  "#88b4a1",
+  "#d8897a",
+  "#9ec1d9",
+  "#c1a6df",
+];
+
 const STYLES = `
 .reports-wrap { display: grid; gap: 18px; }
 .page-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; margin-bottom: 24px; flex-wrap: wrap; }
@@ -32,11 +56,12 @@ const STYLES = `
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }
-.hero-grid, .summary-grid, .two-col, .control-grid { display: grid; gap: 16px; }
+.hero-grid, .summary-grid, .two-col, .control-grid, .visual-grid { display: grid; gap: 16px; }
 .hero-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .two-col { grid-template-columns: 1fr 1fr; }
 .control-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+.visual-grid { grid-template-columns: 1.2fr 0.8fr; }
 .control-stack { display: grid; gap: 8px; min-width: 160px; }
 .actions-panel { min-width: min(100%, 640px); display: grid; gap: 14px; }
 .label, .control-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--sand-500); }
@@ -100,12 +125,27 @@ select.input-shell option {
 .txn-amount { font-family: 'DM Mono', monospace; color: var(--sand-100); font-size: 13px; white-space: nowrap; }
 .txn-balance { color: var(--sand-500); font-size: 11px; margin-top: 4px; }
 .error-box { padding: 12px 14px; border-radius: 12px; color: var(--rose); border: 1px solid rgba(184,112,112,0.35); background: rgba(184,112,112,0.08); }
-@media (max-width: 980px) { .hero-grid, .summary-grid, .two-col { grid-template-columns: 1fr 1fr; } }
+.chart-shell { margin-top: 16px; height: 280px; }
+.chart-meta-row { display: flex; justify-content: space-between; gap: 12px; align-items: end; margin-bottom: 10px; flex-wrap: wrap; }
+.chart-note { color: var(--sand-500); font-size: 12px; max-width: 460px; }
+.legend-inline { display: flex; gap: 14px; flex-wrap: wrap; }
+.legend-item { display: inline-flex; align-items: center; gap: 8px; color: var(--sand-300); font-size: 12px; }
+.legend-swatch { width: 10px; height: 10px; border-radius: 999px; }
+.chart-tooltip {
+  border-radius: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border);
+  background: rgba(18, 16, 12, 0.94);
+  box-shadow: var(--card-shadow);
+}
+.chart-tooltip-title { color: var(--sand-100); font-size: 12px; margin-bottom: 6px; }
+.chart-tooltip-row { display: flex; justify-content: space-between; gap: 14px; color: var(--sand-300); font-size: 12px; }
+@media (max-width: 980px) { .hero-grid, .summary-grid, .two-col, .visual-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px) {
-  .hero-grid, .summary-grid, .two-col, .control-grid { grid-template-columns: 1fr; }
+  .hero-grid, .summary-grid, .two-col, .control-grid, .visual-grid { grid-template-columns: 1fr; }
   .actions-panel { min-width: 100%; }
 }
-@media (max-width: 700px) { .hero-grid, .summary-grid, .two-col { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .hero-grid, .summary-grid, .two-col, .visual-grid { grid-template-columns: 1fr; } }
 `;
 
 function formatCurrency(value, options = {}) {
@@ -125,13 +165,47 @@ function formatDisplayDate(transaction) {
   return `${day}-${month}-${year}`;
 }
 
+function formatCompactCurrency(value) {
+  const numeric = Number(value || 0);
+  return `Rs. ${numeric.toLocaleString("en-IN", {
+    maximumFractionDigits: 1,
+    notation: "compact",
+  })}`;
+}
+
+function formatDayLabel(dateValue) {
+  if (!dateValue) {
+    return "";
+  }
+  const parsed = new Date(`${dateValue}T00:00:00`);
+  return parsed.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+function ChartTooltip({ active, label, payload }) {
+  if (!active || !payload?.length) {
+    return null;
+  }
+
+  return (
+    <div className="chart-tooltip">
+      <div className="chart-tooltip-title">{label}</div>
+      {payload.map((entry) => (
+        <div className="chart-tooltip-row" key={entry.dataKey || entry.name}>
+          <span>{entry.name}</span>
+          <span>{formatCurrency(entry.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Insights() {
   const today = todayValue();
   const currentMonth = currentMonthValue();
   const initialRange = buildReportRange("monthly");
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
   const [reportPeriod, setReportPeriod] = useState("monthly");
-  const [reportFormat, setReportFormat] = useState("xlsx");
+  const [reportFormat, setReportFormat] = useState("pdf");
   const [reportFromDate, setReportFromDate] = useState(initialRange.start);
   const [reportToDate, setReportToDate] = useState(initialRange.end);
   const [downloading, setDownloading] = useState(false);
@@ -172,6 +246,59 @@ export default function Insights() {
   }, [selectedMonth]);
 
   const topCategory = useMemo(() => categorySummary?.categories?.[0] || null, [categorySummary]);
+  const trendData = useMemo(() => {
+    if (!monthlyReport?.transactions?.length) {
+      return [];
+    }
+
+    const grouped = new Map();
+    monthlyReport.transactions.forEach((transaction) => {
+      const key = transaction.date;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          date: key,
+          label: formatDayLabel(key),
+          income: 0,
+          expense: 0,
+        });
+      }
+
+      const bucket = grouped.get(key);
+      const amount = Number(transaction.amount || 0);
+      if (transaction.type === "income") {
+        bucket.income += amount;
+      } else {
+        bucket.expense += amount;
+      }
+    });
+
+    return Array.from(grouped.values());
+  }, [monthlyReport]);
+  const categoryChartData = useMemo(() => {
+    const categories = categorySummary?.categories || [];
+    if (categories.length <= 6) {
+      return categories.map((category) => ({
+        ...category,
+        amount: Number(category.amount || 0),
+      }));
+    }
+
+    const visible = categories.slice(0, 5).map((category) => ({
+      ...category,
+      amount: Number(category.amount || 0),
+    }));
+    const otherAmount = categories.slice(5).reduce((sum, category) => sum + Number(category.amount || 0), 0);
+    const otherPercentage = categories.slice(5).reduce((sum, category) => sum + Number(category.percentage || 0), 0);
+
+    return [
+      ...visible,
+      {
+        name: "Other",
+        amount: otherAmount,
+        percentage: Number(otherPercentage.toFixed(2)),
+      },
+    ];
+  }, [categorySummary]);
 
   async function handleDownloadReport() {
     const snappedRange = buildReportRange(reportPeriod, reportFromDate || reportToDate || today);
@@ -327,6 +454,84 @@ export default function Insights() {
               </div>
             </div>
 
+            <div className="visual-grid">
+              <div className="card">
+                <div className="chart-meta-row">
+                  <div>
+                    <div className="label">Cash Flow Trend</div>
+                    <div className="chart-note">Income and expense movement across the selected month, grouped by transaction day.</div>
+                  </div>
+                  <div className="legend-inline">
+                    <span className="legend-item"><span className="legend-swatch" style={{ background: "#b6d5bf" }} />Income</span>
+                    <span className="legend-item"><span className="legend-swatch" style={{ background: "#d8897a" }} />Expense</span>
+                  </div>
+                </div>
+                {trendData.length === 0 ? (
+                  <div className="meta">Add transactions in this month to see the flow chart.</div>
+                ) : (
+                  <div className="chart-shell">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={trendData} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#b6d5bf" stopOpacity={0.45} />
+                            <stop offset="95%" stopColor="#b6d5bf" stopOpacity={0.02} />
+                          </linearGradient>
+                          <linearGradient id="expenseFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#d8897a" stopOpacity={0.35} />
+                            <stop offset="95%" stopColor="#d8897a" stopOpacity={0.02} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid stroke="rgba(215, 201, 177, 0.08)" strokeDasharray="4 4" vertical={false} />
+                        <XAxis dataKey="label" stroke="rgba(215, 201, 177, 0.55)" tickLine={false} axisLine={false} fontSize={11} />
+                        <YAxis stroke="rgba(215, 201, 177, 0.55)" tickLine={false} axisLine={false} fontSize={11} tickFormatter={formatCompactCurrency} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Area type="monotone" dataKey="income" name="Income" stroke="#b6d5bf" strokeWidth={2.4} fill="url(#incomeFill)" />
+                        <Area type="monotone" dataKey="expense" name="Expense" stroke="#d8897a" strokeWidth={2.2} fill="url(#expenseFill)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+
+              <div className="card">
+                <div className="chart-meta-row">
+                  <div>
+                    <div className="label">Expense Mix</div>
+                    <div className="chart-note">A quick visual split of where this month&apos;s spending went.</div>
+                  </div>
+                </div>
+                {categoryChartData.length === 0 ? (
+                  <div className="meta">No expense categories yet for this month.</div>
+                ) : (
+                  <div className="chart-shell">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={categoryChartData}
+                          dataKey="amount"
+                          nameKey="name"
+                          innerRadius={56}
+                          outerRadius={92}
+                          paddingAngle={3}
+                        >
+                          {categoryChartData.map((entry, index) => (
+                            <Cell key={entry.name} fill={CATEGORY_CHART_COLORS[index % CATEGORY_CHART_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<ChartTooltip />} />
+                        <Legend
+                          verticalAlign="bottom"
+                          iconType="circle"
+                          wrapperStyle={{ fontSize: "12px", color: "var(--sand-300)" }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="two-col">
               <div className="card">
                 <div className="label">Category Summary</div>
@@ -348,26 +553,54 @@ export default function Insights() {
               </div>
 
               <div className="card">
-                <div className="label">Monthly Transactions</div>
-                {monthlyReport.transactions.length === 0 ? (
-                  <div className="meta">No transactions found for this month.</div>
+                <div className="chart-meta-row">
+                  <div>
+                    <div className="label">Category Totals</div>
+                    <div className="chart-note">Ranked monthly expense totals for the categories contributing most to spend.</div>
+                  </div>
+                </div>
+                {categoryChartData.length === 0 ? (
+                  <div className="meta">No category totals available yet.</div>
                 ) : (
-                  monthlyReport.transactions.slice(0, 8).map((transaction) => (
-                    <div className="txn-row" key={transaction.id}>
-                      <div>
-                        <div className="txn-title">{transaction.title}</div>
-                        <div className="txn-meta">{transaction.category_name} | {formatDisplayDate(transaction)}</div>
-                      </div>
-                      <div className="txn-side">
-                        <div className="txn-amount">
-                          {transaction.type === "expense" ? "-" : "+"}{formatCurrency(transaction.amount, { absolute: true })}
-                        </div>
-                        <div className="txn-balance">Balance: {formatCurrency(transaction.available_balance)}</div>
-                      </div>
-                    </div>
-                  ))
+                  <div className="chart-shell" style={{ height: 260 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={categoryChartData} layout="vertical" margin={{ top: 0, right: 8, left: 18, bottom: 0 }}>
+                        <CartesianGrid stroke="rgba(215, 201, 177, 0.08)" strokeDasharray="4 4" horizontal={false} />
+                        <XAxis type="number" stroke="rgba(215, 201, 177, 0.55)" tickLine={false} axisLine={false} fontSize={11} tickFormatter={formatCompactCurrency} />
+                        <YAxis type="category" dataKey="name" stroke="rgba(215, 201, 177, 0.75)" tickLine={false} axisLine={false} width={88} fontSize={11} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Bar dataKey="amount" name="Expense" radius={[0, 10, 10, 0]}>
+                          {categoryChartData.map((entry, index) => (
+                            <Cell key={entry.name} fill={CATEGORY_CHART_COLORS[index % CATEGORY_CHART_COLORS.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 )}
               </div>
+            </div>
+
+            <div className="card">
+              <div className="label">Monthly Transactions</div>
+              {monthlyReport.transactions.length === 0 ? (
+                <div className="meta">No transactions found for this month.</div>
+              ) : (
+                monthlyReport.transactions.slice(0, 8).map((transaction) => (
+                  <div className="txn-row" key={transaction.id}>
+                    <div>
+                      <div className="txn-title">{transaction.title}</div>
+                      <div className="txn-meta">{transaction.category_name} | {formatDisplayDate(transaction)}</div>
+                    </div>
+                    <div className="txn-side">
+                      <div className="txn-amount">
+                        {transaction.type === "expense" ? "-" : "+"}{formatCurrency(transaction.amount, { absolute: true })}
+                      </div>
+                      <div className="txn-balance">Balance: {formatCurrency(transaction.available_balance)}</div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </>
         )}

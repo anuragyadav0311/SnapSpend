@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import BrandLockup, { BRAND_NAME } from "../components/BrandLockup";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { LEDGER_THEME_CSS } from "../styles/ledgerTheme";
@@ -749,7 +750,7 @@ const TITLES = [
 const SUBHEADS = [
   "Create your account in three quick steps.",
   "Set a strong password and agree to terms.",
-  "Personalise your Ledger experience.",
+  `Personalise your ${BRAND_NAME} experience.`,
 ];
 
 const CURRENCY_OPTIONS = [
@@ -993,15 +994,7 @@ export default function Register() {
 
       <div className="shell">
         <div className="glass-card">
-          <div className="brand">
-            <div className="brand-mark">
-              <svg width="17" height="17" viewBox="0 0 18 18" fill="none">
-                <path d="M9 2L14 6V12L9 16L4 12V6L9 2Z" fill="white" opacity="0.95" />
-                <path d="M9 5.5L11 7.5V10.5L9 12.5L7 10.5V7.5L9 5.5Z" fill="white" opacity="0.35" />
-              </svg>
-            </div>
-            <span className="brand-name">Ledger</span>
-          </div>
+          <BrandLockup containerClassName="brand" markClassName="brand-mark" nameClassName="brand-name" size={17} />
 
           {step < 3 && (
             <>
@@ -1271,7 +1264,7 @@ export default function Register() {
             >
               <div className={`chk-box${termsAccepted ? " on" : ""}`} />
               <span className="chk-lbl-txt">
-                I agree to Ledger&apos;s{" "}
+                I agree to {BRAND_NAME}&apos;s{" "}
                 <a className="inline-link" href="#" onClick={(event) => event.preventDefault()}>Terms of Service</a>
                 {" "}and{" "}
                 <a className="inline-link" href="#" onClick={(event) => event.preventDefault()}>Privacy Policy</a>
@@ -1378,7 +1371,7 @@ export default function Register() {
                 </svg>
               </div>
               <h2 className="success-title">You&apos;re in,<br /><em>let&apos;s begin.</em></h2>
-              <p className="success-sub">Your Ledger account is ready. We&apos;re loading your personalised dashboard now.</p>
+              <p className="success-sub">Your {BRAND_NAME} account is ready. We&apos;re loading your personalised dashboard now.</p>
               <button className="btn success-cta" type="button" onClick={triggerToast}>
                 <div className="btn-inner">Go to Dashboard →</div>
               </button>

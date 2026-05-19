@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import BrandLockup, { BRAND_NAME } from "../components/BrandLockup";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { LEDGER_THEME_CSS } from "../styles/ledgerTheme";
@@ -725,15 +726,7 @@ export default function LoginPage() {
 
       <div className="shell">
         <div className="glass-card">
-          <div className="brand">
-            <div className="brand-mark">
-              <svg width="17" height="17" viewBox="0 0 18 18" fill="none">
-                <path d="M9 2L14 6V12L9 16L4 12V6L9 2Z" fill="white" opacity="0.95" />
-                <path d="M9 5.5L11 7.5V10.5L9 12.5L7 10.5V7.5L9 5.5Z" fill="white" opacity="0.35" />
-              </svg>
-            </div>
-            <span className="brand-name">Ledger</span>
-          </div>
+          <BrandLockup containerClassName="brand" markClassName="brand-mark" nameClassName="brand-name" size={17} />
 
           <div className="heading-block">
             <h1 className="heading">Every rupee,<br /><em>accounted for.</em></h1>
@@ -858,7 +851,7 @@ export default function LoginPage() {
               {loading && <div className="btn-progress" style={{ width: `${progress}%` }} />}
               <div className="btn-inner">
                 {loading && <div className="spin" />}
-                {loading ? "Authenticating..." : "Sign In to Ledger"}
+                {loading ? "Authenticating..." : `Sign In to ${BRAND_NAME}`}
               </div>
             </button>
             {submitError && <div className="err-text" style={{ marginTop: 10 }}>{submitError}</div>}

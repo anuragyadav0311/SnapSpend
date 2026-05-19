@@ -3,6 +3,7 @@ from datetime import date, timedelta
 import io
 
 from django.contrib.auth import get_user_model
+from openpyxl import load_workbook
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -101,6 +102,16 @@ class ReportsApiTests(APITestCase):
         self.assertEqual(rows[0], ["Date", "Type", "Category", "Title", "Note", "Amount", "Available Balance"])
         self.assertEqual(rows[1], ["01-05-2026", "Income", "Salary", "Salary", "", "90000.00", "89200.00"])
         self.assertEqual(rows[2], ["05-05-2026", "Expense", "Food & Dining", "Groceries", "Week one", "1200.00", "88000.00"])
+        self.assertIn(["Visual Summary - Totals"], rows)
+        self.assertIn(["Metric", "Amount"], rows)
+        self.assertIn(["Income", "90000.00"], rows)
+        self.assertIn(["Expense", "1200.00"], rows)
+        self.assertIn(["Net Balance", "88800.00"], rows)
+        self.assertIn(["Visual Summary - Expense Categories"], rows)
+        self.assertIn(["Food & Dining", "1200.00"], rows)
+        self.assertIn(["Visual Summary - Daily Cash Flow"], rows)
+        self.assertIn(["01-05-2026", "90000.00", "0.00", "90000.00"], rows)
+        self.assertIn(["05-05-2026", "0.00", "1200.00", "-1200.00"], rows)
 
     def test_export_supports_period_reference_date_filters(self):
         response = self.client.get("/api/reports/export/csv/?period=weekly&reference_date=2026-05-05")
@@ -108,9 +119,18 @@ class ReportsApiTests(APITestCase):
 
         rows = list(csv.reader(io.StringIO(response.content.decode("utf-8"))))
 
-        self.assertEqual(len(rows), 2)
         self.assertEqual(rows[1][0], "05-05-2026")
+        self.assertIn(["Visual Summary - Totals"], rows)
+        self.assertIn(["Expense", "1200.00"], rows)
         self.assertIn("transactions-weekly-2026-05-04-to-2026-05-10.csv", response["Content-Disposition"])
+
+    def test_excel_export_includes_visuals_sheet(self):
+        response = self.client.get("/api/reports/export/xlsx/?month=2026-05")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        workbook = load_workbook(io.BytesIO(response.content))
+        self.assertIn("Report", workbook.sheetnames)
+        self.assertIn("Visuals", workbook.sheetnames)
 
     def test_report_export_rejects_future_dates(self):
         future_date = timezone.localdate() + timedelta(days=1)
