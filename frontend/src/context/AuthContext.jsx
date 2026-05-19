@@ -12,13 +12,14 @@ import {
   updateCurrentUser,
 } from "../services/auth";
 import { clearTokens, hasStoredSession } from "../services/tokenStorage";
+import { BRAND_USER_NAME } from "../components/BrandLockup";
 
 const AuthContext = createContext(null);
 const MOCK_USER_KEY = "ledger-mock-user";
 
 function buildMockUser({ name, email }) {
   const trimmedEmail = email.trim();
-  const fallbackName = trimmedEmail.split("@")[0]?.replace(/[._-]+/g, " ") || "Ledger User";
+  const fallbackName = trimmedEmail.split("@")[0]?.replace(/[._-]+/g, " ") || BRAND_USER_NAME;
   const normalizedName = name?.trim() || fallbackName.replace(/\b\w/g, (match) => match.toUpperCase());
 
   return {

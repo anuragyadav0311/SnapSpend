@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { BRAND_USER_NAME } from "../components/BrandLockup";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { FRONTEND_ONLY_MODE } from "../services/frontendMode";
@@ -403,7 +404,7 @@ export default function Profile() {
         <div className="user-hero">
           <div className="user-avatar">{initials}</div>
           <div className="user-info">
-            <div className="user-name">{user?.name || "Ledger User"}</div>
+            <div className="user-name">{user?.name || BRAND_USER_NAME}</div>
             <div className="user-email">{user?.email || "No email loaded"}</div>
             <div className="user-badge">AUTHENTICATED ACCOUNT</div>
           </div>

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import BrandLockup, { BRAND_NAME, BRAND_USER_NAME } from "../components/BrandLockup";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { LEDGER_THEME_CSS } from "../styles/ledgerTheme";
@@ -447,15 +448,12 @@ export default function MainLayout() {
 
             <div className="layout-wrap">
                 <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
-                    <div className="sidebar-brand">
-                        <div className="sidebar-brand-mark">
-                            <svg width="15" height="15" viewBox="0 0 18 18" fill="none">
-                                <path d="M9 2L14 6V12L9 16L4 12V6L9 2Z" fill="white" opacity="0.95" />
-                                <path d="M9 5.5L11 7.5V10.5L9 12.5L7 10.5V7.5L9 5.5Z" fill="white" opacity="0.35" />
-                            </svg>
-                        </div>
-                        <span className="sidebar-brand-name">Ledger</span>
-                    </div>
+                    <BrandLockup
+                        containerClassName="sidebar-brand"
+                        markClassName="sidebar-brand-mark"
+                        nameClassName="sidebar-brand-name"
+                        size={15}
+                    />
 
                     <nav className="nav-section">
                         <div className="nav-label">Menu</div>
@@ -474,7 +472,7 @@ export default function MainLayout() {
 
                     <div className="sidebar-footer">
                         <div className="sidebar-user">
-                            <div className="sidebar-user-name">{user?.name || "Ledger User"}</div>
+                            <div className="sidebar-user-name">{user?.name || BRAND_USER_NAME}</div>
                             <div className="sidebar-user-email">{user?.email || "Signed in"}</div>
                         </div>
                         <button
@@ -506,7 +504,7 @@ export default function MainLayout() {
                             <line x1="3" y1="18" x2="21" y2="18" />
                         </svg>
                     </button>
-                    <span className="sidebar-brand-name mobile-brand">Ledger</span>
+                    <span className="sidebar-brand-name mobile-brand">{BRAND_NAME}</span>
                     <button
                         className="mobile-theme-toggle"
                         type="button"

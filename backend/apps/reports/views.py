@@ -112,11 +112,12 @@ class ReportCSVView(BaseExportView):
     def get(self, request):
         queryset = self.filtered_transactions(request)
         transactions = build_transaction_report_rows(request.user, list(queryset))
+        totals = self.totals(queryset)
         descriptor = self.report_descriptor(request)
         response = HttpResponse(content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="{descriptor["filename_stem"]}.csv"'
         writer = csv.writer(response)
-        writer.writerows(build_csv_response_rows(transactions))
+        writer.writerows(build_csv_response_rows(transactions, totals))
         return response
 
 

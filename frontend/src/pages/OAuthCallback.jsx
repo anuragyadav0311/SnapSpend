@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
+import { BRAND_NAME } from "../components/BrandLockup";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { LEDGER_THEME_CSS } from "../styles/ledgerTheme";
@@ -173,7 +174,7 @@ export default function OAuthCallback() {
           <div className="title">{status === "loading" ? "Finishing sign-in." : "Sign-in paused."}</div>
           <div className="copy">
             {status === "loading"
-              ? "We are validating your account and opening your Ledger workspace."
+              ? `We are validating your account and opening your ${BRAND_NAME} workspace.`
               : "The provider returned, but we could not finish the account handoff cleanly."}
           </div>
 
