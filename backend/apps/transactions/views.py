@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from .models import Category, Transaction, TransactionVerification
 from .ocr import BillOcrError, extract_amounts_from_text, extract_dates, extract_expense_from_bill
 from .serializers import CategorySerializer, TransactionSerializer, TransactionVerificationSerializer
-from ml.anomaly_detector import detect_anomalies
+from ml.anomaly_detector import DEFAULT_CONTAMINATION, detect_anomalies, score_new_transaction
 
 
 def parse_money(value):
@@ -212,17 +212,20 @@ class TransactionViewSet(viewsets.ModelViewSet):
         )
 
         recent = list(self.get_queryset().order_by("date", "created_at"))
-        candidates = [SimpleNamespace(
+        history = [SimpleNamespace(
             id=tx.id,
             amount=tx.amount,
             type=tx.type,
             category=SimpleNamespace(name=tx.category.name if tx.category else "Uncategorized"),
             date=tx.date,
+            updated_at=tx.updated_at,
         ) for tx in recent]
-        candidates.append(new_tx)
 
-        results = detect_anomalies(candidates)
-        new_result = next((r for r in results if r.transaction_id == -1), None)
+        new_result = score_new_transaction(
+            history,
+            new_tx,
+            cache_key=f"user-{request.user.id}",
+        )
 
         if new_result and new_result.is_anomaly:
             token = uuid4().hex
@@ -455,7 +458,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="anomalies")
     def anomalies(self, request):
         try:
-            contamination = float(request.query_params.get("contamination", "0.08"))
+            contamination = float(request.query_params.get("contamination", str(DEFAULT_CONTAMINATION)))
         except ValueError:
             raise ValidationError({"contamination": "Enter a valid number."})
 
@@ -463,7 +466,11 @@ class TransactionViewSet(viewsets.ModelViewSet):
             raise ValidationError({"contamination": "Value must be greater than 0 and less than 0.5."})
 
         transactions = list(self.get_queryset().order_by("date", "created_at"))
-        results = detect_anomalies(transactions, contamination=contamination)
+        results = detect_anomalies(
+            transactions,
+            contamination=contamination,
+            cache_key=f"user-{request.user.id}",
+        )
         result_map = {result.transaction_id: result for result in results}
         anomalous_transactions = [
             transaction
