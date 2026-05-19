@@ -1,255 +1,188 @@
 # Deployment Guide
 
-Complete step-by-step guide for deploying the Expense Tracker to production.
+Production deployment guide for the Expense Tracker stack.
 
----
+## Architecture
 
-## Architecture Overview
+- Frontend: Vite/React app deployed to Vercel or another static host
+- Backend: Django REST API deployed to Render, Railway, Fly.io, or a similar Python host
+- Database: Managed PostgreSQL such as Neon, Supabase, Railway Postgres, or Render Postgres
 
-```
-                    ┌─────────────┐
-                    │   Browser   │
-                    └──────┬──────┘
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-      ┌───────▼───────┐       ┌────────▼────────┐
-      │    Vercel      │       │     Render      │
-      │  (Frontend)    │──────▶│   (Backend)     │
-      │  React + Vite  │  API  │  Django + DRF   │
-      └───────────────┘       └────────┬────────┘
-                                       │
-                              ┌────────▼────────┐
-                              │  Neon/Supabase   │
-                              │  (PostgreSQL)    │
-                              └─────────────────┘
-```
+## Backend Prep
 
----
+The backend is already set up for production with:
 
-## Step 1: Deploy the Database
+- `gunicorn` for the web server
+- `whitenoise` for static file serving
+- `build.sh` for install, checks, migrations, seeding, and static collection
+- `Procfile` for platforms that expect a process definition
+- environment-driven Django settings
+- `DATABASE_URL` support for cloud-hosted PostgreSQL
 
-### Option A: Neon (Recommended)
-
-1. Sign up at [neon.tech](https://neon.tech)
-2. Click **New Project**
-3. Set project name: `expense-tracker`
-4. Choose region closest to your Render backend region
-5. Copy the connection details:
-   - Host: `ep-xxxxx.us-east-2.aws.neon.tech`
-   - Database: `neondb`
-   - User: `your_user`
-   - Password: `your_password`
-
-### Option B: Supabase
-
-1. Sign up at [supabase.com](https://supabase.com)
-2. Create new project: `expense-tracker`
-3. Go to **Settings → Database**
-4. Copy connection details from the **Connection string** section
-
-### Verify Connection
-
-```bash
-psql "postgresql://user:password@host:5432/database?sslmode=require"
-# Should connect successfully
-\dt  # Should show no tables (empty database)
-\q
-```
-
----
-
-## Step 2: Deploy the Backend (Render)
-
-### 2.1 Prepare the Backend
-
-Ensure these files exist:
-
-**`backend/requirements.txt`** — already configured with all dependencies
-
-**`backend/build.sh`** — create this file:
+### Included Build Script
 
 ```bash
 #!/usr/bin/env bash
 set -o errexit
 
 pip install -r requirements.txt
+python manage.py check --deploy
 python manage.py collectstatic --noinput
 python manage.py migrate
 python manage.py seed_categories
 ```
 
-Make it executable:
-```bash
-chmod +x backend/build.sh
+### Included Procfile
+
+```procfile
+web: gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --log-file -
 ```
 
-### 2.2 Create Render Web Service
+## Step 1: Provision PostgreSQL
 
-1. Go to [render.com](https://render.com) → **New** → **Web Service**
-2. Connect your GitHub repository
-3. Configure:
+Use any managed PostgreSQL provider. Prefer copying the full connection string if the provider exposes one.
+
+Example:
+
+```text
+postgresql://user:password@host:5432/database?sslmode=require
+```
+
+If your provider does not expose a single URL, keep the individual values for:
+
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_HOST`
+- `POSTGRES_PORT`
+
+## Step 2: Deploy the Backend
+
+Recommended Render settings:
 
 | Setting | Value |
-|---------|-------|
-| **Name** | `expense-tracker-api` |
-| **Region** | Same as your database |
-| **Root Directory** | `backend` |
-| **Runtime** | Python 3 |
-| **Build Command** | `./build.sh` |
-| **Start Command** | `gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2` |
-| **Plan** | Free |
+| --- | --- |
+| Name | `expense-tracker-api` |
+| Root Directory | `backend` |
+| Runtime | `Python 3` |
+| Build Command | `./build.sh` |
+| Start Command | `gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --log-file -` |
 
-### 2.3 Set Environment Variables on Render
+### Required Backend Environment Variables
 
-| Variable | Value |
-|----------|-------|
-| `SECRET_KEY` | Generate with: `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"` |
+| Variable | Example |
+| --- | --- |
+| `SECRET_KEY` | generated Django secret |
 | `DEBUG` | `False` |
-| `ALLOWED_HOSTS` | `expense-tracker-api.onrender.com,localhost` |
-| `POSTGRES_DB` | Your cloud DB name |
-| `POSTGRES_USER` | Your cloud DB user |
-| `POSTGRES_PASSWORD` | Your cloud DB password |
-| `POSTGRES_HOST` | Your cloud DB host |
-| `POSTGRES_PORT` | `5432` |
-| `FRONTEND_URL` | `https://expense-tracker-xxxx.vercel.app` (update after Vercel deploy) |
-| `PYTHON_VERSION` | `3.11.9` |
+| `ALLOWED_HOSTS` | `expense-tracker-api.onrender.com` |
+| `FRONTEND_URLS` | `https://expense-tracker.vercel.app` |
+| `DJANGO_LOG_LEVEL` | `INFO` |
+| `WEB_CONCURRENCY` | `2` |
 
-### 2.4 Verify Backend Deployment
+### Database Configuration Options
+
+Preferred option:
+
+| Variable | Example |
+| --- | --- |
+| `DATABASE_URL` | `postgresql://user:password@host:5432/database?sslmode=require` |
+| `POSTGRES_SSL_REQUIRE` | `True` |
+
+Fallback option:
+
+| Variable | Example |
+| --- | --- |
+| `DATABASE_ENGINE` | `postgres` |
+| `POSTGRES_DB` | your database name |
+| `POSTGRES_USER` | your database user |
+| `POSTGRES_PASSWORD` | your database password |
+| `POSTGRES_HOST` | your database host |
+| `POSTGRES_PORT` | `5432` |
+| `POSTGRES_SSL_REQUIRE` | `True` |
+
+### Optional OAuth Variables
+
+Set these only if you are enabling those flows in production:
+
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI`
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_PROJECT_NUMBER`
+- `APPLE_OAUTH_CLIENT_ID`
+- `APPLE_OAUTH_TEAM_ID`
+- `APPLE_OAUTH_KEY_ID`
+- `APPLE_OAUTH_PRIVATE_KEY`
+- `APPLE_OAUTH_REDIRECT_URI`
+
+### Backend Verification
+
+After deploy, confirm the service is healthy:
 
 ```bash
 curl https://expense-tracker-api.onrender.com/health/
-# Expected: {"status": "ok"}
 ```
 
----
-
-## Step 3: Deploy the Frontend (Vercel)
-
-### 3.1 Create Vercel Project
-
-1. Go to [vercel.com](https://vercel.com) → **New Project**
-2. Import your GitHub repository
-3. Configure:
-
-| Setting | Value |
-|---------|-------|
-| **Project Name** | `expense-tracker` |
-| **Root Directory** | `frontend` |
-| **Framework Preset** | Vite |
-| **Build Command** | `npm run build` |
-| **Output Directory** | `dist` |
-
-### 3.2 Set Environment Variables on Vercel
-
-| Variable | Value |
-|----------|-------|
-| `VITE_API_URL` | `https://expense-tracker-api.onrender.com` |
-
-### 3.3 Handle SPA Routing
-
-Create `frontend/vercel.json`:
+Expected response:
 
 ```json
-{
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
-  ]
-}
+{"status":"ok"}
 ```
 
-### 3.4 Verify Frontend Deployment
+## Step 3: Deploy the Frontend
 
-Visit `https://expense-tracker-xxxx.vercel.app` — the app should load and show the login page.
+Recommended Vercel settings:
 
----
+| Setting | Value |
+| --- | --- |
+| Root Directory | `frontend` |
+| Framework Preset | `Vite` |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
 
-## Step 4: Post-Deployment Configuration
+### Frontend Environment Variables
 
-### 4.1 Update CORS
+| Variable | Example |
+| --- | --- |
+| `VITE_API_URL` | `https://expense-tracker-api.onrender.com` |
+| `VITE_FRONTEND_ONLY` | `false` |
+| `VITE_FIREBASE_API_KEY` | Firebase web app API key |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `your-project.firebaseapp.com` |
+| `VITE_FIREBASE_PROJECT_ID` | Firebase project ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase sender ID |
+| `VITE_FIREBASE_APP_ID` | Firebase app ID |
 
-After Vercel deploy, update the `FRONTEND_URL` env var on Render with the actual Vercel URL.
+The frontend already includes `vercel.json` for SPA rewrites.
 
-### 4.2 Create Production Superuser
+## Step 4: Final Production Checks
 
-```bash
-# Using Render Shell (Dashboard → Shell tab)
-python manage.py createsuperuser
-```
-
-### 4.3 Seed Production Data
-
-```bash
-# Should already run via build.sh, but verify:
-python manage.py seed_categories
-```
-
-### 4.4 Verify End-to-End
-
-1. Open the Vercel URL in a browser
-2. Register a new account
-3. Login with the new account
-4. Add a transaction
-5. Check the dashboard
-6. Export a CSV report
-
----
+- Open the frontend URL and confirm the login page loads
+- Register a user and confirm the backend responds
+- Create a transaction and confirm dashboard data updates
+- Export a CSV or PDF report
+- Verify backend logs are visible in your hosting platform
+- Confirm static files load correctly
 
 ## Production Checklist
 
-### Security
+- `SECRET_KEY` is not the default value
+- `DEBUG=False`
+- `ALLOWED_HOSTS` contains only real backend domains
+- `FRONTEND_URLS` contains only trusted frontend origins
+- `DATABASE_URL` or PostgreSQL env vars point to managed PostgreSQL
+- `POSTGRES_SSL_REQUIRE=True` in production
+- `/health/` returns `{"status":"ok"}`
+- migrations run successfully
+- `collectstatic` succeeds
+- frontend build succeeds
 
-- [ ] `SECRET_KEY` is a strong random value (not `change-me`)
-- [ ] `DEBUG` is set to `False`
-- [ ] `ALLOWED_HOSTS` only contains production domains
-- [ ] CORS is configured to allow only the frontend domain
-- [ ] SSL is enforced on all connections
-- [ ] Database credentials are not committed to git
-- [ ] `.env` files are in `.gitignore`
+## Troubleshooting
 
-### Performance
-
-- [ ] Static files are collected (`collectstatic`)
-- [ ] Gunicorn is configured with appropriate worker count
-- [ ] Database connection pooling is enabled (Neon default)
-- [ ] Frontend is built in production mode (`npm run build`)
-
-### Reliability
-
-- [ ] Health check endpoint responds correctly
-- [ ] Database migrations have been applied
-- [ ] Default categories are seeded
-- [ ] Error logging is configured
-
-### Monitoring
-
-- [ ] Render dashboard shows service as running
-- [ ] Vercel deployment shows as successful
-- [ ] Database dashboard shows active connections
-
----
-
-## Troubleshooting Production Issues
-
-| Issue | Solution |
-|-------|----------|
-| CORS errors in browser console | Verify `FRONTEND_URL` on Render matches Vercel URL exactly |
-| 500 errors on API | Check Render logs for Python tracebacks |
-| Static files not loading | Run `collectstatic` and verify `whitenoise` is in middleware |
-| Database connection timeout | Verify cloud DB credentials and check if IP whitelisting is needed |
-| Frontend shows blank page | Check browser console for errors; verify `VITE_API_URL` is correct |
-| Render free tier sleeps | First request after inactivity takes ~30s; consider paid plan |
-| JWT token expired | Frontend should auto-refresh; check `SIMPLE_JWT` settings |
-
----
-
-## Cost Estimate (Free Tier)
-
-| Service | Free Tier Limits |
-|---------|-----------------|
-| **Vercel** | 100 GB bandwidth/month, unlimited deploys |
-| **Render** | 750 hours/month, sleeps after 15 min inactivity |
-| **Neon** | 0.5 GB storage, 1 compute unit |
-| **Supabase** | 500 MB storage, 2 GB bandwidth |
-
-> For a student/portfolio project, the free tiers of all services are more than sufficient.
+| Issue | What to check |
+| --- | --- |
+| CORS errors | `FRONTEND_URLS` exactly matches the deployed frontend origin |
+| Backend boot failure | required env vars, `SECRET_KEY`, and database connectivity |
+| Static files missing | `whitenoise` is enabled and `collectstatic` completed |
+| Database connection errors | `DATABASE_URL`, SSL settings, provider allowlist/network settings |
+| Blank frontend page | `VITE_API_URL`, browser console, and Vercel build logs |
