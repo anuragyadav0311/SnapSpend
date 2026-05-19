@@ -28,6 +28,8 @@ backend/staticfiles/
 backend/media/
 *.sqlite3
 db.sqlite3
+backend/ml/model_cache/
+backend/ml/*.joblib
 
 # ===========================
 # Node / React / Vite

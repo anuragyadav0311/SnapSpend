@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.transactions.models import Transaction
-from ml.anomaly_detector import TransactionAnomalyDetector, detect_anomalies
+from ml.anomaly_detector import DEFAULT_CONTAMINATION, TransactionAnomalyDetector, detect_anomalies
 
 
 class Command(BaseCommand):
@@ -15,7 +15,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--contamination",
             type=float,
-            default=0.08,
+            default=DEFAULT_CONTAMINATION,
             help="Expected anomaly ratio. Must be greater than 0 and less than 0.5.",
         )
         parser.add_argument(

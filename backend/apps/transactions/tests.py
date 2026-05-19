@@ -1,9 +1,13 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -229,6 +233,34 @@ class TransactionApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["detail"], "Please upload a bill photo.")
 
+    def test_create_transaction_with_normal_variation_skips_verification(self):
+        for index in range(12):
+            Transaction.objects.create(
+                user=self.user,
+                type="expense",
+                amount=Decimal("450.00") + Decimal(index),
+                category=self.default_expense,
+                title=f"Regular grocery {index}",
+                date=date(2026, 5, min(index + 1, 28)),
+            )
+
+        response = self.client.post(
+            "/api/transactions/",
+            {
+                "type": "expense",
+                "amount": "462.00",
+                "category": self.default_expense.id,
+                "title": "Regular grocery 12",
+                "note": "Still within normal range",
+                "date": "2026-05-16",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(TransactionVerification.objects.filter(user=self.user).exists())
+        self.assertTrue(Transaction.objects.filter(user=self.user, title="Regular grocery 12").exists())
+
     def test_anomalies_endpoint_flags_unusual_transaction(self):
         for index in range(12):
             Transaction.objects.create(
@@ -303,13 +335,81 @@ class TransactionApiTests(APITestCase):
 
     def test_detect_anomalies_fallback(self):
         # small synthetic dataset to trigger statistical fallback
-        from types import SimpleNamespace
         from ml.anomaly_detector import detect_anomalies
 
         txs = [SimpleNamespace(id=i, amount=amt, type="expense", category=SimpleNamespace(name="Groceries"), date=None) for i, amt in enumerate([10, 12, 11, 10000])]
         results = detect_anomalies(txs, min_training_samples=2)
         self.assertEqual(len(results), 4)
         self.assertTrue(any(r.is_anomaly for r in results))
+
+    def test_score_new_transaction_uses_history_only(self):
+        from ml.anomaly_detector import score_new_transaction
+
+        history = [
+            SimpleNamespace(
+                id=index,
+                amount=Decimal("450.00") + Decimal(index),
+                type="expense",
+                category=SimpleNamespace(name="Food & Dining"),
+                date=date(2026, 5, min(index + 1, 28)),
+            )
+            for index in range(12)
+        ]
+        regular_candidate = SimpleNamespace(
+            id=100,
+            amount=Decimal("462.00"),
+            type="expense",
+            category=SimpleNamespace(name="Food & Dining"),
+            date=date(2026, 5, 16),
+        )
+        outlier_candidate = SimpleNamespace(
+            id=101,
+            amount=Decimal("25000.00"),
+            type="expense",
+            category=SimpleNamespace(name="Food & Dining"),
+            date=date(2026, 5, 16),
+        )
+
+        regular_result = score_new_transaction(history, regular_candidate)
+        outlier_result = score_new_transaction(history, outlier_candidate)
+
+        self.assertFalse(regular_result.is_anomaly)
+        self.assertTrue(outlier_result.is_anomaly)
+
+    def test_detect_anomalies_reuses_saved_model_cache(self):
+        from ml.anomaly_detector import detect_anomalies, get_model_cache_path
+
+        txs = [
+            SimpleNamespace(
+                id=index,
+                amount=Decimal("450.00") + Decimal(index),
+                type="expense",
+                category=SimpleNamespace(name="Food & Dining"),
+                date=date(2026, 5, min(index + 1, 28)),
+            )
+            for index in range(12)
+        ]
+        txs.append(
+            SimpleNamespace(
+                id=100,
+                amount=Decimal("25000.00"),
+                type="expense",
+                category=SimpleNamespace(name="Food & Dining"),
+                date=date(2026, 5, 15),
+            )
+        )
+
+        with TemporaryDirectory() as temp_dir:
+            with override_settings(ML_ANOMALY_CACHE_DIR=temp_dir, ML_ANOMALY_CACHE_ENABLED=True):
+                detect_anomalies(txs, min_training_samples=2, cache_key="user-1", use_cache=True)
+                cache_path = get_model_cache_path("user-1")
+                self.assertTrue(Path(cache_path).exists())
+
+                with patch("ml.anomaly_detector.TransactionAnomalyDetector.fit", side_effect=AssertionError("fit should not run")):
+                    results = detect_anomalies(txs, min_training_samples=2, cache_key="user-1", use_cache=True)
+
+        self.assertEqual(len(results), len(txs))
+        self.assertTrue(any(result.is_anomaly for result in results))
 
     @patch("apps.transactions.views.extract_expense_from_bill")
     def test_verification_flow_creates_verification_and_then_transaction(self, mock_extract):
