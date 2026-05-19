@@ -84,17 +84,11 @@ def compare_bill_to_proposed(image, categories, proposed):
 
     amount_ok = amounts_match(ocr_amounts, proposed.get("amount"))
     date_ok = dates_match(ocr_dates, proposed.get("date"))
-    category_ok = draft.category_name.lower() == proposed.get("category_name", "").lower()
-
-    proposed_title = proposed.get("title", "").lower().strip()
-    title_ok = proposed_title and proposed_title in draft.raw_text.lower()
-    verified = (amount_ok and date_ok) or (amount_ok and (category_ok or title_ok))
+    verified = amount_ok and date_ok
 
     return draft, verified, {
         "amount": amount_ok,
         "date": date_ok,
-        "category": category_ok,
-        "title": title_ok,
     }
 
 
@@ -202,6 +196,11 @@ class TransactionViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         validated = serializer.validated_data
+        if validated.get("type") == "income":
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
         category = validated.get("category")
         new_tx = SimpleNamespace(
             id=-1,
@@ -211,7 +210,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
             date=validated.get("date"),
         )
 
-        recent = list(self.get_queryset().order_by("date", "created_at"))
+        recent = list(self.get_queryset().filter(type="expense").order_by("date", "created_at"))
         history = [SimpleNamespace(
             id=tx.id,
             amount=tx.amount,
@@ -340,22 +339,10 @@ class TransactionViewSet(viewsets.ModelViewSet):
         proposed_amount = proposed.get("amount")
         amount_ok = amounts_match(ocr_amounts, proposed_amount)
         date_ok = dates_match(ocr_dates, proposed.get("date"))
-        category_ok = draft.category_name.lower() == proposed.get("category_name", "").lower()
-
-        # Also check if the proposed title appears in the OCR text (case-insensitive)
-        proposed_title = proposed.get("title", "").lower().strip()
-        title_ok = proposed_title and proposed_title in draft.raw_text.lower()
-
         verification.ocr_raw_text = draft.raw_text
         verification.save()
 
-        # Verification passes if:
-        #  - amount and date match, OR
-        #  - amount matches and either category or title provides secondary evidence
-        verified = (
-            (amount_ok and date_ok)
-            or (amount_ok and (category_ok or title_ok))
-        )
+        verified = amount_ok and date_ok
 
         if verified:
             # create the real transaction
@@ -384,7 +371,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
                     "title": draft.title,
                     "raw_text": draft.raw_text,
                 },
-                "matches": {"amount": amount_ok, "date": date_ok, "category": category_ok, "title": title_ok},
+                "matches": {"amount": amount_ok, "date": date_ok},
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
@@ -465,7 +452,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
         if not 0 < contamination < 0.5:
             raise ValidationError({"contamination": "Value must be greater than 0 and less than 0.5."})
 
-        transactions = list(self.get_queryset().order_by("date", "created_at"))
+        transactions = list(self.get_queryset().filter(type="expense").order_by("date", "created_at"))
         results = detect_anomalies(
             transactions,
             contamination=contamination,

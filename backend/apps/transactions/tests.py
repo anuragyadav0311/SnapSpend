@@ -261,6 +261,26 @@ class TransactionApiTests(APITestCase):
         self.assertFalse(TransactionVerification.objects.filter(user=self.user).exists())
         self.assertTrue(Transaction.objects.filter(user=self.user, title="Regular grocery 12").exists())
 
+    @patch("apps.transactions.views.score_new_transaction")
+    def test_create_income_skips_anomaly_detection(self, mock_score):
+        response = self.client.post(
+            "/api/transactions/",
+            {
+                "type": "income",
+                "amount": "9999999.00",
+                "category": self.user_income.id,
+                "title": "Large bonus",
+                "note": "No bill verification needed",
+                "date": "2026-05-16",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(TransactionVerification.objects.filter(user=self.user).exists())
+        self.assertTrue(Transaction.objects.filter(user=self.user, title="Large bonus").exists())
+        mock_score.assert_not_called()
+
     def test_anomalies_endpoint_flags_unusual_transaction(self):
         for index in range(12):
             Transaction.objects.create(
@@ -286,6 +306,32 @@ class TransactionApiTests(APITestCase):
         anomaly_ids = {item["id"] for item in response.data["results"]}
         self.assertIn(unusual.id, anomaly_ids)
         self.assertEqual(response.data["total_checked"], 13)
+
+    def test_anomalies_endpoint_ignores_income_transactions(self):
+        for index in range(12):
+            Transaction.objects.create(
+                user=self.user,
+                type="expense",
+                amount=Decimal("450.00") + Decimal(index),
+                category=self.default_expense,
+                title=f"Regular grocery {index}",
+                date=date(2026, 5, min(index + 1, 28)),
+            )
+        income = Transaction.objects.create(
+            user=self.user,
+            type="income",
+            amount=Decimal("9999999.00"),
+            category=self.user_income,
+            title="Large bonus",
+            date=date(2026, 5, 15),
+        )
+
+        response = self.client.get("/api/transactions/anomalies/?contamination=0.15")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        anomaly_ids = {item["id"] for item in response.data["results"]}
+        self.assertNotIn(income.id, anomaly_ids)
+        self.assertEqual(response.data["total_checked"], 12)
 
     def test_anomalies_endpoint_excludes_ocr_verified_transactions(self):
         for index in range(12):
@@ -488,6 +534,77 @@ class TransactionApiTests(APITestCase):
         self.assertEqual(response.data["amount"], "649.00")
         self.assertEqual(response.data["date"], "2026-05-01")
         self.assertTrue(Transaction.objects.filter(title="Netflix", amount=Decimal("649.00")).exists())
+
+    @patch("apps.transactions.views.extract_expense_from_bill")
+    def test_verification_checks_only_amount_and_date(self, mock_extract):
+        verification = TransactionVerification.objects.create(
+            user=self.user,
+            proposed={
+                "type": "expense",
+                "amount": 2500.0,
+                "category": self.default_expense.id,
+                "category_name": self.default_expense.name,
+                "title": "Office chair",
+                "note": "",
+                "date": "2026-05-12",
+            },
+            anomaly_reason="Unusual amount.",
+        )
+        mock_extract.return_value = BillDraft(
+            amount=Decimal("2500.00"),
+            date="2026-05-12",
+            title="Different merchant",
+            category_id=None,
+            category_name="Uncategorized",
+            note="Scanned from bill photo.",
+            raw_text="Different merchant\nDate 12/05/2026\nTotal 2500.00",
+        )
+
+        image = SimpleUploadedFile("chair.jpg", b"fake-image", content_type="image/jpeg")
+        response = self.client.post(
+            "/api/transactions/verify/",
+            {"token": verification.token, "image": image},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["amount"], "2500.00")
+        self.assertEqual(response.data["date"], "2026-05-12")
+
+    @patch("apps.transactions.views.extract_expense_from_bill")
+    def test_verification_rejects_when_date_mismatches_even_if_title_matches(self, mock_extract):
+        verification = TransactionVerification.objects.create(
+            user=self.user,
+            proposed={
+                "type": "expense",
+                "amount": 2500.0,
+                "category": self.default_expense.id,
+                "category_name": self.default_expense.name,
+                "title": "Office chair",
+                "note": "",
+                "date": "2026-05-12",
+            },
+            anomaly_reason="Unusual amount.",
+        )
+        mock_extract.return_value = BillDraft(
+            amount=Decimal("2500.00"),
+            date="2026-05-11",
+            title="Office chair",
+            category_id=self.default_expense.id,
+            category_name=self.default_expense.name,
+            note="Scanned from bill photo.",
+            raw_text="Office chair\nDate 11/05/2026\nTotal 2500.00",
+        )
+
+        image = SimpleUploadedFile("chair.jpg", b"fake-image", content_type="image/jpeg")
+        response = self.client.post(
+            "/api/transactions/verify/",
+            {"token": verification.token, "image": image},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["matches"], {"amount": True, "date": False})
 
     @patch("apps.transactions.views.extract_expense_from_bill")
     def test_verify_existing_flagged_transaction_with_ocr(self, mock_extract):
