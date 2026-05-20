@@ -9,7 +9,7 @@ import { LEDGER_TICKER_ITEMS, useLedgerCanvas } from "../utils/ledgerScene";
 const STYLES = `
 ${LEDGER_THEME_CSS}
 
-.bg-canvas { position: fixed; inset: 0; z-index: 0; }
+.bg-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 
 .bg-mesh {
   position: fixed;

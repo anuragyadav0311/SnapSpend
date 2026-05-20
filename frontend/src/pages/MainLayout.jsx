@@ -9,7 +9,7 @@ import { useLedgerCanvas } from "../utils/ledgerScene";
 const STYLES = `
 ${LEDGER_THEME_CSS}
 
-.layout-canvas { position: fixed; inset: 0; z-index: 0; }
+.layout-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 
 .layout-mesh {
   position: fixed;
