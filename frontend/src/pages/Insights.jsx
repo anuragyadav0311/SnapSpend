@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { AnimatedCounter } from "../components/SharedComponents";
 import { downloadReport, fetchCategorySummary, fetchMonthlyReport } from "../services/reports";
+import { listTransactions } from "../services/transactions";
 import { getBudgetBalance } from "../utils/budgetDisplay";
 import { buildReportRange, clampDateToToday, currentMonthValue, normalizeDateRange, todayValue } from "../utils/dateConstraints";
 
@@ -31,6 +32,13 @@ const REPORT_FORMAT_OPTIONS = [
   { value: "csv", label: "CSV" },
   { value: "xlsx", label: "Excel" },
   { value: "pdf", label: "PDF" },
+];
+
+const QUARTER_OPTIONS = [
+  { value: "1", label: "Q1" },
+  { value: "2", label: "Q2" },
+  { value: "3", label: "Q3" },
+  { value: "4", label: "Q4" },
 ];
 
 const CATEGORY_CHART_COLORS = [
@@ -128,9 +136,25 @@ select.input-shell option {
 .chart-shell { margin-top: 16px; height: 280px; }
 .chart-meta-row { display: flex; justify-content: space-between; gap: 12px; align-items: end; margin-bottom: 10px; flex-wrap: wrap; }
 .chart-note { color: var(--sand-500); font-size: 12px; max-width: 460px; }
+.comparison-controls { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.comparison-control { min-width: 110px; flex: 1 1 130px; }
 .legend-inline { display: flex; gap: 14px; flex-wrap: wrap; }
 .legend-item { display: inline-flex; align-items: center; gap: 8px; color: var(--sand-300); font-size: 12px; }
 .legend-swatch { width: 10px; height: 10px; border-radius: 999px; }
+.compare-totals { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.compare-pill {
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--surface-border);
+  background: rgba(255, 255, 255, 0.03);
+}
+.compare-pill strong {
+  display: block;
+  color: var(--sand-100);
+  font-size: 12px;
+  font-weight: 600;
+}
+.compare-pill span { color: var(--sand-500); font-size: 11px; }
 .chart-tooltip {
   border-radius: 14px;
   padding: 10px 12px;
@@ -140,6 +164,8 @@ select.input-shell option {
 }
 .chart-tooltip-title { color: var(--sand-100); font-size: 12px; margin-bottom: 6px; }
 .chart-tooltip-row { display: flex; justify-content: space-between; gap: 14px; color: var(--sand-300); font-size: 12px; }
+.compare-status { color: var(--sand-500); font-size: 12px; }
+.compare-status.error { color: var(--rose); }
 @media (max-width: 980px) { .hero-grid, .summary-grid, .two-col, .visual-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px) {
   .hero-grid, .summary-grid, .two-col, .control-grid, .visual-grid { grid-template-columns: 1fr; }
@@ -181,6 +207,105 @@ function formatDayLabel(dateValue) {
   return parsed.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
+function formatPercentage(value) {
+  const numeric = Number(value || 0);
+  return `${numeric.toFixed(numeric % 1 === 0 ? 0 : 1)}%`;
+}
+
+function deriveQuarterFromMonth(monthValue) {
+  const monthNumber = Number((monthValue || "").slice(5, 7) || 1);
+  return Math.floor((monthNumber - 1) / 3) + 1;
+}
+
+function deriveYearFromMonth(monthValue) {
+  return String((monthValue || "").slice(0, 4) || new Date().getFullYear());
+}
+
+function buildQuarterAnchorDate(yearValue, quarterValue) {
+  const monthNumber = (Number(quarterValue || 1) - 1) * 3 + 1;
+  return `${yearValue}-${String(monthNumber).padStart(2, "0")}-01`;
+}
+
+function buildYearAnchorDate(yearValue) {
+  return `${yearValue}-01-01`;
+}
+
+function isValidHistoricalYear(yearValue, currentYear) {
+  return /^\d{4}$/.test(yearValue || "") && Number(yearValue) >= 2000 && Number(yearValue) <= currentYear;
+}
+
+function isFutureQuarterSelection(yearValue, quarterValue, currentYear, currentQuarter) {
+  const yearNumber = Number(yearValue || 0);
+  const quarterNumber = Number(quarterValue || 0);
+  return yearNumber > currentYear || (yearNumber === currentYear && quarterNumber > currentQuarter);
+}
+
+function formatQuarterSelectionLabel(quarterValue, yearValue) {
+  if (!quarterValue || !yearValue) {
+    return "the selected quarter";
+  }
+  return `Q${quarterValue} ${yearValue}`;
+}
+
+function buildComparisonPayloadFromTransactions({ transactions = [], anchorDate, range, period }) {
+  const anchor = new Date(`${anchorDate}T00:00:00`);
+  const startMonthIndex = period === "yearly" ? 0 : Math.floor(anchor.getMonth() / 3) * 3;
+  const startMonth = new Date(anchor.getFullYear(), startMonthIndex, 1);
+  const monthCount = period === "yearly" ? 12 : 3;
+  const series = Array.from({ length: monthCount }, (_, offset) => {
+    const bucketDate = new Date(startMonth.getFullYear(), startMonth.getMonth() + offset, 1);
+    const month = `${bucketDate.getFullYear()}-${String(bucketDate.getMonth() + 1).padStart(2, "0")}-01`;
+    return {
+      month,
+      label: bucketDate.toLocaleDateString("en-IN", { month: "short" }),
+      income: 0,
+      expense: 0,
+      balance: 0,
+    };
+  });
+
+  const buckets = new Map(series.map((item) => [item.month, item]));
+  transactions.forEach((transaction) => {
+    const monthKey = transaction?.date ? `${transaction.date.slice(0, 7)}-01` : "";
+    const bucket = buckets.get(monthKey);
+    if (!bucket) {
+      return;
+    }
+
+    const amount = Number(transaction.amount || 0);
+    if (transaction.type === "income") {
+      bucket.income += amount;
+    } else {
+      bucket.expense += amount;
+    }
+  });
+
+  series.forEach((item) => {
+    item.balance = item.income - item.expense;
+  });
+
+  return {
+    label:
+      period === "yearly"
+        ? String(startMonth.getFullYear())
+        : formatQuarterSelectionLabel(String(Math.floor(startMonth.getMonth() / 3) + 1), String(startMonth.getFullYear())),
+    start: range.start,
+    end: range.end,
+    series,
+  };
+}
+
+function summarizeComparisonSeries(series = []) {
+  return series.reduce(
+    (summary, item) => {
+      summary.income += Number(item.income || 0);
+      summary.expense += Number(item.expense || 0);
+      return summary;
+    },
+    { income: 0, expense: 0, balance: 0 },
+  );
+}
+
 function ChartTooltip({ active, label, payload }) {
   if (!active || !payload?.length) {
     return null;
@@ -192,7 +317,10 @@ function ChartTooltip({ active, label, payload }) {
       {payload.map((entry) => (
         <div className="chart-tooltip-row" key={entry.dataKey || entry.name}>
           <span>{entry.name}</span>
-          <span>{formatCurrency(entry.value)}</span>
+          <span>
+            {formatCurrency(entry.value)}
+            {entry.payload?.percentage ? ` | ${formatPercentage(entry.payload.percentage)}` : ""}
+          </span>
         </div>
       ))}
     </div>
@@ -202,8 +330,13 @@ function ChartTooltip({ active, label, payload }) {
 export default function Insights() {
   const today = todayValue();
   const currentMonth = currentMonthValue();
+  const currentYear = Number(currentMonth.slice(0, 4));
+  const currentQuarter = deriveQuarterFromMonth(currentMonth);
   const initialRange = buildReportRange("monthly");
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
+  const [selectedQuarter, setSelectedQuarter] = useState(String(deriveQuarterFromMonth(currentMonth)));
+  const [selectedQuarterYear, setSelectedQuarterYear] = useState(deriveYearFromMonth(currentMonth));
+  const [selectedYear, setSelectedYear] = useState(deriveYearFromMonth(currentMonth));
   const [reportPeriod, setReportPeriod] = useState("monthly");
   const [reportFormat, setReportFormat] = useState("pdf");
   const [reportFromDate, setReportFromDate] = useState(initialRange.start);
@@ -211,8 +344,14 @@ export default function Insights() {
   const [downloading, setDownloading] = useState(false);
   const [monthlyReport, setMonthlyReport] = useState(null);
   const [categorySummary, setCategorySummary] = useState(null);
+  const [quarterComparison, setQuarterComparison] = useState(null);
+  const [yearComparison, setYearComparison] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [quarterLoading, setQuarterLoading] = useState(true);
+  const [yearLoading, setYearLoading] = useState(true);
   const [pageError, setPageError] = useState("");
+  const [quarterError, setQuarterError] = useState("");
+  const [yearError, setYearError] = useState("");
   const budgetBalance = monthlyReport?.budget ? getBudgetBalance(monthlyReport.budget.remaining_amount) : null;
 
   useEffect(() => {
@@ -244,6 +383,108 @@ export default function Insights() {
       mounted = false;
     };
   }, [selectedMonth]);
+
+  useEffect(() => {
+    const hasValidYear = isValidHistoricalYear(selectedQuarterYear, currentYear);
+    const hasFutureQuarter = hasValidYear && isFutureQuarterSelection(selectedQuarterYear, selectedQuarter, currentYear, currentQuarter);
+
+    if (!hasValidYear) {
+      setQuarterLoading(false);
+      setQuarterComparison(null);
+      setQuarterError("Enter a year from 2000 to the current year to compare a quarter.");
+      return undefined;
+    }
+
+    if (hasFutureQuarter) {
+      setQuarterLoading(false);
+      setQuarterComparison(null);
+      setQuarterError("Future quarters are not available yet.");
+      return undefined;
+    }
+
+    let mounted = true;
+    setQuarterLoading(true);
+    setQuarterError("");
+
+    const anchorDate = buildQuarterAnchorDate(selectedQuarterYear, selectedQuarter);
+    const range = buildReportRange("quarterly", anchorDate);
+
+    listTransactions({ start_date: range.start, end_date: range.end, ordering: "oldest" })
+      .then((transactions) => {
+        if (mounted) {
+          setQuarterComparison(
+            buildComparisonPayloadFromTransactions({
+              transactions,
+              anchorDate,
+              range,
+              period: "quarterly",
+            }),
+          );
+        }
+      })
+      .catch((error) => {
+        if (mounted) {
+          setQuarterComparison(null);
+          setQuarterError(error.message || "Unable to load the quarter comparison.");
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setQuarterLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentQuarter, currentYear, selectedQuarter, selectedQuarterYear]);
+
+  useEffect(() => {
+    const hasValidYear = isValidHistoricalYear(selectedYear, currentYear);
+
+    if (!hasValidYear) {
+      setYearLoading(false);
+      setYearComparison(null);
+      setYearError("Enter a year from 2000 to the current year to compare a year.");
+      return undefined;
+    }
+
+    let mounted = true;
+    setYearLoading(true);
+    setYearError("");
+
+    const anchorDate = buildYearAnchorDate(selectedYear);
+    const range = buildReportRange("yearly", anchorDate);
+
+    listTransactions({ start_date: range.start, end_date: range.end, ordering: "oldest" })
+      .then((transactions) => {
+        if (mounted) {
+          setYearComparison(
+            buildComparisonPayloadFromTransactions({
+              transactions,
+              anchorDate,
+              range,
+              period: "yearly",
+            }),
+          );
+        }
+      })
+      .catch((error) => {
+        if (mounted) {
+          setYearComparison(null);
+          setYearError(error.message || "Unable to load the yearly comparison.");
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setYearLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentYear, selectedYear]);
 
   const topCategory = useMemo(() => categorySummary?.categories?.[0] || null, [categorySummary]);
   const trendData = useMemo(() => {
@@ -299,6 +540,14 @@ export default function Insights() {
       },
     ];
   }, [categorySummary]);
+  const quarterTotals = useMemo(() => {
+    const totals = summarizeComparisonSeries(quarterComparison?.series);
+    return { ...totals, balance: totals.income - totals.expense };
+  }, [quarterComparison]);
+  const yearTotals = useMemo(() => {
+    const totals = summarizeComparisonSeries(yearComparison?.series);
+    return { ...totals, balance: totals.income - totals.expense };
+  }, [yearComparison]);
 
   async function handleDownloadReport() {
     const snappedRange = buildReportRange(reportPeriod, reportFromDate || reportToDate || today);
@@ -524,6 +773,7 @@ export default function Insights() {
                           verticalAlign="bottom"
                           iconType="circle"
                           wrapperStyle={{ fontSize: "12px", color: "var(--sand-300)" }}
+                          formatter={(value, entry) => `${value} (${formatPercentage(entry.payload?.percentage)})`}
                         />
                       </PieChart>
                     </ResponsiveContainer>
@@ -534,51 +784,157 @@ export default function Insights() {
 
             <div className="two-col">
               <div className="card">
-                <div className="label">Category Summary</div>
-                {categorySummary.categories.length === 0 ? (
-                  <div className="meta">No categories to summarize yet.</div>
-                ) : (
-                  categorySummary.categories.map((category) => (
-                    <div className="bar-row" key={category.name}>
-                      <div className="bar-top">
-                        <span>{category.name}</span>
-                        <span>{formatCurrency(category.amount)} | {category.percentage}%</span>
-                      </div>
-                      <div className="bar-track">
-                        <div className="bar-fill" style={{ width: `${Math.min(category.percentage, 100)}%` }} />
-                      </div>
+                <div className="chart-meta-row">
+                  <div>
+                    <div className="label">Quarterly Comparison</div>
+                    <div className="chart-note">Income versus expense across {quarterComparison?.label || formatQuarterSelectionLabel(selectedQuarter, selectedQuarterYear)}.</div>
+                    <div className="comparison-controls">
+                      <label className="control-stack comparison-control">
+                        <span className="control-label">Quarter</span>
+                        <select className="input-shell" value={selectedQuarter} onChange={(event) => setSelectedQuarter(event.target.value)}>
+                          {QUARTER_OPTIONS.map((option) => (
+                            <option
+                              key={option.value}
+                              value={option.value}
+                              disabled={Number(selectedQuarterYear) === currentYear && Number(option.value) > currentQuarter}
+                            >
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="control-stack comparison-control">
+                        <span className="control-label">Year</span>
+                        <input
+                          className="input-shell"
+                          type="number"
+                          min="2000"
+                          max={currentYear}
+                          value={selectedQuarterYear}
+                          onChange={(event) => setSelectedQuarterYear(event.target.value.slice(0, 4))}
+                        />
+                      </label>
                     </div>
-                  ))
+                  </div>
+                  <div className="legend-inline">
+                    <span className="legend-item"><span className="legend-swatch" style={{ background: "#b6d5bf" }} />Income</span>
+                    <span className="legend-item"><span className="legend-swatch" style={{ background: "#d8897a" }} />Expense</span>
+                  </div>
+                </div>
+                <div className="compare-totals">
+                  <div className="compare-pill">
+                    <strong>{formatCurrency(quarterTotals.income)}</strong>
+                    <span>Quarter income</span>
+                  </div>
+                  <div className="compare-pill">
+                    <strong>{formatCurrency(quarterTotals.expense)}</strong>
+                    <span>Quarter expense</span>
+                  </div>
+                  <div className="compare-pill">
+                    <strong>{formatCurrency(quarterTotals.balance)}</strong>
+                    <span>Net balance</span>
+                  </div>
+                </div>
+                {quarterLoading ? (
+                  <div className="compare-status">Loading quarter comparison...</div>
+                ) : quarterError ? (
+                  <div className="compare-status error">{quarterError}</div>
+                ) : quarterComparison?.series?.length ? (
+                  <div className="chart-shell">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={quarterComparison.series} margin={{ top: 12, right: 8, left: 0, bottom: 0 }} barCategoryGap="20%">
+                        <CartesianGrid stroke="rgba(215, 201, 177, 0.08)" strokeDasharray="4 4" vertical={false} />
+                        <XAxis dataKey="label" stroke="rgba(215, 201, 177, 0.55)" tickLine={false} axisLine={false} fontSize={11} />
+                        <YAxis stroke="rgba(215, 201, 177, 0.55)" tickLine={false} axisLine={false} fontSize={11} tickFormatter={formatCompactCurrency} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Bar dataKey="income" name="Income" fill="#b6d5bf" radius={[10, 10, 0, 0]} maxBarSize={34} />
+                        <Bar dataKey="expense" name="Expense" fill="#d8897a" radius={[10, 10, 0, 0]} maxBarSize={34} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="meta">Add transactions in this quarter to compare monthly income and expense.</div>
                 )}
               </div>
 
               <div className="card">
                 <div className="chart-meta-row">
                   <div>
-                    <div className="label">Category Totals</div>
-                    <div className="chart-note">Ranked monthly expense totals for the categories contributing most to spend.</div>
+                    <div className="label">Yearly Comparison</div>
+                    <div className="chart-note">A month-by-month view of income versus expense across {yearComparison?.label || selectedYear || "the selected year"}.</div>
+                    <div className="comparison-controls">
+                      <label className="control-stack comparison-control">
+                        <span className="control-label">Year</span>
+                        <input
+                          className="input-shell"
+                          type="number"
+                          min="2000"
+                          max={currentYear}
+                          value={selectedYear}
+                          onChange={(event) => setSelectedYear(event.target.value.slice(0, 4))}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <div className="legend-inline">
+                    <span className="legend-item"><span className="legend-swatch" style={{ background: "#b6d5bf" }} />Income</span>
+                    <span className="legend-item"><span className="legend-swatch" style={{ background: "#d8897a" }} />Expense</span>
                   </div>
                 </div>
-                {categoryChartData.length === 0 ? (
-                  <div className="meta">No category totals available yet.</div>
-                ) : (
-                  <div className="chart-shell" style={{ height: 260 }}>
+                <div className="compare-totals">
+                  <div className="compare-pill">
+                    <strong>{formatCurrency(yearTotals.income)}</strong>
+                    <span>Year income</span>
+                  </div>
+                  <div className="compare-pill">
+                    <strong>{formatCurrency(yearTotals.expense)}</strong>
+                    <span>Year expense</span>
+                  </div>
+                  <div className="compare-pill">
+                    <strong>{formatCurrency(yearTotals.balance)}</strong>
+                    <span>Net balance</span>
+                  </div>
+                </div>
+                {yearLoading ? (
+                  <div className="compare-status">Loading yearly comparison...</div>
+                ) : yearError ? (
+                  <div className="compare-status error">{yearError}</div>
+                ) : yearComparison?.series?.length ? (
+                  <div className="chart-shell">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={categoryChartData} layout="vertical" margin={{ top: 0, right: 8, left: 18, bottom: 0 }}>
-                        <CartesianGrid stroke="rgba(215, 201, 177, 0.08)" strokeDasharray="4 4" horizontal={false} />
-                        <XAxis type="number" stroke="rgba(215, 201, 177, 0.55)" tickLine={false} axisLine={false} fontSize={11} tickFormatter={formatCompactCurrency} />
-                        <YAxis type="category" dataKey="name" stroke="rgba(215, 201, 177, 0.75)" tickLine={false} axisLine={false} width={88} fontSize={11} />
+                      <BarChart data={yearComparison.series} margin={{ top: 12, right: 8, left: 0, bottom: 0 }} barCategoryGap="24%">
+                        <CartesianGrid stroke="rgba(215, 201, 177, 0.08)" strokeDasharray="4 4" vertical={false} />
+                        <XAxis dataKey="label" stroke="rgba(215, 201, 177, 0.55)" tickLine={false} axisLine={false} fontSize={11} />
+                        <YAxis stroke="rgba(215, 201, 177, 0.55)" tickLine={false} axisLine={false} fontSize={11} tickFormatter={formatCompactCurrency} />
                         <Tooltip content={<ChartTooltip />} />
-                        <Bar dataKey="amount" name="Expense" radius={[0, 10, 10, 0]}>
-                          {categoryChartData.map((entry, index) => (
-                            <Cell key={entry.name} fill={CATEGORY_CHART_COLORS[index % CATEGORY_CHART_COLORS.length]} />
-                          ))}
-                        </Bar>
+                        <Bar dataKey="income" name="Income" fill="#b6d5bf" radius={[8, 8, 0, 0]} maxBarSize={22} />
+                        <Bar dataKey="expense" name="Expense" fill="#d8897a" radius={[8, 8, 0, 0]} maxBarSize={22} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+                ) : (
+                  <div className="meta">Add transactions in this year to compare income and expense by month.</div>
                 )}
               </div>
+            </div>
+
+            <div className="card">
+              <div className="label">Category Summary</div>
+              {categorySummary.categories.length === 0 ? (
+                <div className="meta">No categories to summarize yet.</div>
+              ) : (
+                categorySummary.categories.map((category) => (
+                  <div className="bar-row" key={category.name}>
+                    <div className="bar-top">
+                      <span>{category.name}</span>
+                      <span>{formatCurrency(category.amount)} | {category.percentage}%</span>
+                    </div>
+                    <div className="bar-track">
+                      <div className="bar-fill" style={{ width: `${Math.min(category.percentage, 100)}%` }} />
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
 
             <div className="card">
