@@ -6,8 +6,6 @@ from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-
-
 from apps.accounts.oauth import build_oauth_handoff_token
 from apps.accounts.serializers import CustomTokenObtainPairSerializer
 
