@@ -19,6 +19,11 @@ from apps.transactions.ocr import BillDraft, parse_bill_text
 User = get_user_model()
 
 
+def shift_to_month_start(reference_date, month_offset):
+    month_index = reference_date.year * 12 + reference_date.month - 1 + month_offset
+    return date(month_index // 12, month_index % 12 + 1, 1)
+
+
 class TransactionApiTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(name="Finance User", email="finance@example.com", password="SecurePass@123")
@@ -263,14 +268,16 @@ class TransactionApiTests(APITestCase):
 
     def test_create_transaction_with_recurring_monthly_expense_skips_verification(self):
         housing = Category.objects.create(name="Housing", type="expense", user=None)
-        for month in range(1, 11):
+        target_month = timezone.localdate().replace(day=1)
+        for month_offset in range(-10, 0):
+            month_start = shift_to_month_start(target_month, month_offset)
             Transaction.objects.create(
                 user=self.user,
                 type="expense",
-                amount=Decimal("12000.00") + Decimal("250.00") * Decimal(month % 2),
+                amount=Decimal("12000.00") + Decimal("250.00") * Decimal(abs(month_offset) % 2),
                 category=housing,
                 title="Apartment Rent",
-                date=date(2026, month, 1),
+                date=month_start,
             )
 
         response = self.client.post(
@@ -281,14 +288,14 @@ class TransactionApiTests(APITestCase):
                 "category": housing.id,
                 "title": "Apartment Rent",
                 "note": "Usual monthly rent",
-                "date": "2026-11-01",
+                "date": target_month.isoformat(),
             },
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertFalse(TransactionVerification.objects.filter(user=self.user).exists())
-        self.assertTrue(Transaction.objects.filter(user=self.user, title="Apartment Rent", date=date(2026, 11, 1)).exists())
+        self.assertTrue(Transaction.objects.filter(user=self.user, title="Apartment Rent", date=target_month).exists())
 
     @patch("apps.transactions.views.score_new_transaction")
     def test_create_income_skips_anomaly_detection(self, mock_score):

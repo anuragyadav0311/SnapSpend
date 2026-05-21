@@ -1,10 +1,10 @@
 import { api, getApiErrorMessage } from "./api";
 import { FRONTEND_ONLY_MODE } from "./frontendMode";
 
-const MOCK_TRANSACTIONS_KEY = "ledger-mock-transactions";
-const MOCK_CATEGORIES_KEY = "ledger-mock-categories";
+export const MOCK_TRANSACTIONS_KEY = "ledger-mock-transactions";
+export const MOCK_CATEGORIES_KEY = "ledger-mock-categories";
 
-const DEFAULT_CATEGORIES = [
+export const DEFAULT_CATEGORIES = [
   { id: 1, name: "Food & Dining", type: "expense" },
   { id: 2, name: "Transport", type: "expense" },
   { id: 3, name: "Entertainment", type: "expense" },
@@ -13,7 +13,7 @@ const DEFAULT_CATEGORIES = [
   { id: 6, name: "Freelance", type: "income" },
 ];
 
-const DEFAULT_TRANSACTIONS = [
+export const DEFAULT_TRANSACTIONS = [
   {
     id: 1,
     type: "expense",

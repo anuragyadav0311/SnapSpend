@@ -1,16 +1,17 @@
-from dotenv import load_dotenv
-
-load_dotenv()
 import os
-import dj_database_url
+import sys
 from datetime import timedelta
 from pathlib import Path
 
+from dotenv import load_dotenv
 import dj_database_url
 from decouple import Csv, config
 
+load_dotenv()
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+RUNNING_TESTS = "test" in sys.argv
 
 
 def env_bool(name: str, default: bool) -> bool:
@@ -79,7 +80,8 @@ TEMPLATES = [
     }
 ]
 
-DATABASE_ENGINE = config("DATABASE_ENGINE", default="postgres").strip().lower()
+DEFAULT_DATABASE_ENGINE = "sqlite" if RUNNING_TESTS else "postgres"
+DATABASE_ENGINE = config("DATABASE_ENGINE", default=DEFAULT_DATABASE_ENGINE).strip().lower()
 DATABASE_URL = config("DATABASE_URL", default="").strip()
 POSTGRES_CONN_MAX_AGE = config("POSTGRES_CONN_MAX_AGE", default=60, cast=int)
 POSTGRES_SSL_REQUIRE = env_bool("POSTGRES_SSL_REQUIRE", not DEBUG)
@@ -195,15 +197,15 @@ ML_ANOMALY_CACHE_ENABLED = env_bool("ML_ANOMALY_CACHE_ENABLED", True)
 ML_ANOMALY_CACHE_DIR = str(BASE_DIR / config("ML_ANOMALY_CACHE_DIR", default="ml/model_cache"))
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG and not RUNNING_TESTS
+CSRF_COOKIE_SECURE = not DEBUG and not RUNNING_TESTS
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = env_bool("CSRF_COOKIE_HTTPONLY", True)
 SESSION_COOKIE_SAMESITE = config("SESSION_COOKIE_SAMESITE", default="Lax")
 CSRF_COOKIE_SAMESITE = config("CSRF_COOKIE_SAMESITE", default="Lax")
-SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", not DEBUG)
-SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=0 if DEBUG else 31536000, cast=int)
-SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", not DEBUG and not RUNNING_TESTS)
+SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=0 if DEBUG or RUNNING_TESTS else 31536000, cast=int)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG and not RUNNING_TESTS)
 SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", False)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = config("SECURE_REFERRER_POLICY", default="same-origin")
