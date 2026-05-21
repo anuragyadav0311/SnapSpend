@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -261,6 +261,35 @@ class TransactionApiTests(APITestCase):
         self.assertFalse(TransactionVerification.objects.filter(user=self.user).exists())
         self.assertTrue(Transaction.objects.filter(user=self.user, title="Regular grocery 12").exists())
 
+    def test_create_transaction_with_recurring_monthly_expense_skips_verification(self):
+        housing = Category.objects.create(name="Housing", type="expense", user=None)
+        for month in range(1, 11):
+            Transaction.objects.create(
+                user=self.user,
+                type="expense",
+                amount=Decimal("12000.00") + Decimal("250.00") * Decimal(month % 2),
+                category=housing,
+                title="Apartment Rent",
+                date=date(2026, month, 1),
+            )
+
+        response = self.client.post(
+            "/api/transactions/",
+            {
+                "type": "expense",
+                "amount": "12200.00",
+                "category": housing.id,
+                "title": "Apartment Rent",
+                "note": "Usual monthly rent",
+                "date": "2026-11-01",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(TransactionVerification.objects.filter(user=self.user).exists())
+        self.assertTrue(Transaction.objects.filter(user=self.user, title="Apartment Rent", date=date(2026, 11, 1)).exists())
+
     @patch("apps.transactions.views.score_new_transaction")
     def test_create_income_skips_anomaly_detection(self, mock_score):
         response = self.client.post(
@@ -397,6 +426,7 @@ class TransactionApiTests(APITestCase):
                 amount=Decimal("450.00") + Decimal(index),
                 type="expense",
                 category=SimpleNamespace(name="Food & Dining"),
+                title=f"regular grocery {index}",
                 date=date(2026, 5, min(index + 1, 28)),
             )
             for index in range(12)
@@ -406,6 +436,7 @@ class TransactionApiTests(APITestCase):
             amount=Decimal("462.00"),
             type="expense",
             category=SimpleNamespace(name="Food & Dining"),
+            title="regular grocery 12",
             date=date(2026, 5, 16),
         )
         outlier_candidate = SimpleNamespace(
@@ -413,6 +444,7 @@ class TransactionApiTests(APITestCase):
             amount=Decimal("25000.00"),
             type="expense",
             category=SimpleNamespace(name="Food & Dining"),
+            title="appliance repair",
             date=date(2026, 5, 16),
         )
 
@@ -421,6 +453,34 @@ class TransactionApiTests(APITestCase):
 
         self.assertFalse(regular_result.is_anomaly)
         self.assertTrue(outlier_result.is_anomaly)
+
+    def test_score_new_transaction_flags_large_first_time_category_expense(self):
+        from ml.anomaly_detector import score_new_transaction
+
+        history = [
+            SimpleNamespace(
+                id=index,
+                amount=Decimal("12000.00") + Decimal(index % 2) * Decimal("250.00"),
+                type="expense",
+                category=SimpleNamespace(name="Housing"),
+                title="apartment rent",
+                date=date(2025, index + 1, 1),
+            )
+            for index in range(10)
+        ]
+        candidate = SimpleNamespace(
+            id=200,
+            amount=Decimal("45000.00"),
+            type="expense",
+            category=SimpleNamespace(name="Travel"),
+            title="emergency flight",
+            date=date(2025, 11, 3),
+        )
+
+        result = score_new_transaction(history, candidate, min_training_samples=5)
+
+        self.assertTrue(result.is_anomaly)
+        self.assertIn("first travel expense", result.reason.lower())
 
     def test_detect_anomalies_reuses_saved_model_cache(self):
         from ml.anomaly_detector import detect_anomalies, get_model_cache_path
@@ -641,3 +701,61 @@ class TransactionApiTests(APITestCase):
             if item.proposed.get("transaction_id") == transaction.id
         )
         self.assertTrue(verification.is_verified)
+
+
+class AnomalyDetectorTests(SimpleTestCase):
+    def test_recurring_monthly_expense_stays_clean(self):
+        from ml.anomaly_detector import score_new_transaction
+
+        history = [
+            SimpleNamespace(
+                id=index,
+                amount=Decimal("12000.00") + Decimal(index % 2) * Decimal("250.00"),
+                type="expense",
+                category=SimpleNamespace(name="Housing"),
+                title="apartment rent",
+                date=date(2025, index + 1, 1),
+            )
+            for index in range(10)
+        ]
+        candidate = SimpleNamespace(
+            id=100,
+            amount=Decimal("12200.00"),
+            type="expense",
+            category=SimpleNamespace(name="Housing"),
+            title="apartment rent",
+            date=date(2025, 11, 1),
+        )
+
+        result = score_new_transaction(history, candidate, min_training_samples=5, use_cache=False)
+
+        self.assertFalse(result.is_anomaly)
+        self.assertIn("monthly housing pattern", result.reason.lower())
+
+    def test_large_first_time_category_gets_flagged(self):
+        from ml.anomaly_detector import score_new_transaction
+
+        history = [
+            SimpleNamespace(
+                id=index,
+                amount=Decimal("12000.00") + Decimal(index % 2) * Decimal("250.00"),
+                type="expense",
+                category=SimpleNamespace(name="Housing"),
+                title="apartment rent",
+                date=date(2025, index + 1, 1),
+            )
+            for index in range(10)
+        ]
+        candidate = SimpleNamespace(
+            id=200,
+            amount=Decimal("45000.00"),
+            type="expense",
+            category=SimpleNamespace(name="Travel"),
+            title="emergency flight",
+            date=date(2025, 11, 3),
+        )
+
+        result = score_new_transaction(history, candidate, min_training_samples=5, use_cache=False)
+
+        self.assertTrue(result.is_anomaly)
+        self.assertIn("first travel expense", result.reason.lower())

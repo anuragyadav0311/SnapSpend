@@ -207,6 +207,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
             amount=validated.get("amount"),
             type=validated.get("type"),
             category=SimpleNamespace(name=category.name if category else "Uncategorized"),
+            title=validated.get("title"),
             date=validated.get("date"),
         )
 
@@ -216,6 +217,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
             amount=tx.amount,
             type=tx.type,
             category=SimpleNamespace(name=tx.category.name if tx.category else "Uncategorized"),
+            title=tx.title,
             date=tx.date,
             updated_at=tx.updated_at,
         ) for tx in recent]
