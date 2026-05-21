@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { CategoryPill } from "../components/SharedComponents";
 import { FRONTEND_ONLY_MODE } from "../services/frontendMode";
@@ -1755,8 +1756,8 @@ export default function Transactions() {
         </button>
       </div>
 
-      {/* ML Anomaly Verification Modal */}
-      {anomalyModal && (
+      {/* ML Anomaly Verification Modal — portaled to body to escape .page-enter transform */}
+      {anomalyModal && createPortal(
         <div className="anomaly-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeAnomalyModal(); }}>
           <div className="anomaly-modal">
             <div className="anomaly-icon-wrap">
@@ -1831,7 +1832,8 @@ export default function Transactions() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
