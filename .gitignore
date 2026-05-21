@@ -72,3 +72,6 @@ Desktop.ini
 *.temp
 .cache/
 *.pid
+report/*.pdf
+report/*.docx
+
