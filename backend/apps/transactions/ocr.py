@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import platform
 import re
 import shutil
 import statistics
@@ -148,8 +149,25 @@ def extract_expense_from_bill(image_file, categories) -> BillDraft:
     return max(drafts, key=score_bill_draft)
 
 
+def get_tesseract_path() -> str | None:
+    path = shutil.which("tesseract")
+    if path:
+        return path
+
+    if platform.system() == "Windows":
+        common_paths = [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        ]
+        for p in common_paths:
+            if Path(p).is_file():
+                return p
+    return None
+
+
 def run_tesseract(image_file) -> list[str]:
-    if not shutil.which("tesseract"):
+    tesseract_cmd = get_tesseract_path()
+    if not tesseract_cmd:
         raise BillOcrError("Tesseract OCR is not installed on this system.")
 
     result = None
@@ -163,7 +181,7 @@ def run_tesseract(image_file) -> list[str]:
                     processed.save(image_path)
                     for psm in TESSERACT_PSMS:
                         result = subprocess.run(
-                            ["tesseract", str(image_path), "stdout", "--psm", psm, "-l", "eng"],
+                            [tesseract_cmd, str(image_path), "stdout", "--psm", psm, "-l", "eng"],
                             check=False,
                             capture_output=True,
                             text=True,
