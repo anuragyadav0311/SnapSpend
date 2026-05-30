@@ -1,127 +1,145 @@
-# Contributing Guide
+# Contributing to SnapSpend
 
-## Branch Strategy
+Thanks for helping improve SnapSpend. This guide keeps contributions predictable, reviewable, and easy for the team to maintain.
 
-Each team member works on their own feature branch:
+## Ways to Contribute
 
-| Member | Branch | Scope |
-|--------|--------|-------|
-| Member 1 | `feature/backend-auth-core` | Django project, auth, JWT, CORS, settings |
-| Member 2 | `feature/backend-finance` | Transactions, budgets, reports, exports |
-| Member 3 | `feature/frontend-ui` | React pages, components, services, hooks |
-| Member 4 | `feature/database-docs-deploy` | Database docs, seeds, QA, README, deployment, ML anomaly detection |
-
-## Workflow
-
-1. **Pull latest main:**
-   ```bash
-   git checkout main
-   git pull origin main
-   ```
-
-2. **Switch to your branch:**
-   ```bash
-   git checkout feature/your-branch
-   git merge main  # incorporate any merged changes
-   ```
-
-3. **Work and commit:**
-   ```bash
-   git add .
-   git commit -m "feat(scope): description"
-   ```
-
-4. **Push and create PR:**
-   ```bash
-   git push origin feature/your-branch
-   ```
-   Then open a Pull Request on GitHub.
-
-5. **Review and merge:**
-   - Get at least one teammate review
-   - Resolve conflicts if any
-   - Merge via GitHub PR (not direct push)
-
-## Commit Message Convention
-
-Use the format: `type(scope): description`
-
-### Types
-- `feat` — New feature
-- `fix` — Bug fix
-- `docs` — Documentation changes
-- `refactor` — Code refactoring
-- `test` — Adding or updating tests
-- `chore` — Maintenance tasks
-
-### Scopes
-- `auth` — Authentication related
-- `transactions` — Transaction/category features
-- `budgets` — Budget features
-- `reports` — Reports and exports
-- `dashboard` — Dashboard UI
-- `ml` — ML anomaly detection, training, model artifacts, and ML docs
-- `database` — Database docs and seeds
-- `deploy` — Deployment configuration
-
-### Examples
-```
-feat(auth): add user registration API
-fix(transactions): handle negative amount validation
-docs(database): add ER diagram and data dictionary
-feat(ml): add anomaly detector training command
-refactor(dashboard): extract chart components
-test(budgets): add budget calculation tests
-chore(deploy): update Render build script
-```
-
-## File Ownership Rules
-
-To minimize merge conflicts, each member owns specific files:
-
-### Member 1 (initially owns)
-- `backend/config/settings.py`
-- `backend/config/urls.py`
-- `backend/requirements.txt`
-- `backend/apps/accounts/`
-
-### Member 2
-- `backend/apps/transactions/` (models, serializers, views, urls)
-- `backend/apps/budgets/`
-- `backend/apps/reports/`
-
-### Member 3
-- `frontend/src/` (all files)
-- `frontend/package.json`
-
-### Member 4
-- `README.md`
-- `database/`
-- `backend/ml/`
-- ML-related docs, tests, training scripts, and model artifact changes
-- `.gitignore`
-- `backend/build.sh`
-- `frontend/vercel.json`
-
-> **Rule:** If you need to edit a file owned by another member, communicate first and coordinate the change.
+- Fix bugs in authentication, transactions, budgets, reports, ML, OCR, or frontend workflows.
+- Improve test coverage for backend APIs and frontend business flows.
+- Refine documentation, setup notes, screenshots, and deployment guides.
+- Improve accessibility, responsiveness, and form validation.
+- Propose new finance features through an issue before starting large work.
 
 ## Development Setup
 
-See the [README](README.md) for full setup instructions.
-
-### Quick Start
+Follow the full setup in [README.md](README.md). The short version is:
 
 ```bash
 # Backend
-cd backend && python -m venv venv && source venv/bin/activate
+cd backend
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # edit with your DB credentials
+cp .env.example .env
 python manage.py migrate
 python manage.py seed_categories
 python manage.py runserver
+```
 
-# Frontend (new terminal)
-cd frontend && npm install
+```bash
+# Frontend
+cd frontend
+npm install
 cp .env.example .env
 npm run dev
 ```
+
+## Branch Strategy
+
+Use short-lived branches from `main`:
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b feature/short-description
+```
+
+Recommended prefixes:
+
+- `feature/` for new behavior
+- `fix/` for bug fixes
+- `docs/` for documentation
+- `test/` for test-only changes
+- `chore/` for maintenance
+
+## Commit Messages
+
+Use this format:
+
+```text
+type(scope): short description
+```
+
+Common types:
+
+- `feat` - new feature
+- `fix` - bug fix
+- `docs` - documentation
+- `refactor` - internal code improvement
+- `test` - tests
+- `chore` - maintenance
+
+Common scopes:
+
+- `auth`
+- `transactions`
+- `budgets`
+- `reports`
+- `dashboard`
+- `ml`
+- `ocr`
+- `frontend`
+- `database`
+- `deploy`
+
+Examples:
+
+```text
+feat(transactions): add receipt verification status
+fix(budgets): handle exceeded budget percentage
+docs(readme): add architecture diagram
+test(auth): cover refresh token rotation
+```
+
+## Pull Request Checklist
+
+Before opening a PR:
+
+- Keep the change focused on one problem or feature.
+- Run backend tests when backend behavior changes.
+- Run the frontend build when frontend code changes.
+- Update docs when setup, APIs, environment variables, or workflows change.
+- Add screenshots or GIFs for user-facing UI changes.
+- Avoid committing secrets, local databases, virtual environments, logs, or generated build output.
+
+Validation commands:
+
+```bash
+cd backend
+python manage.py test
+```
+
+```bash
+cd frontend
+npm run build
+```
+
+## Code Style
+
+- Match the style of the surrounding files.
+- Prefer clear domain names over clever abstractions.
+- Keep API behavior consistent across apps.
+- Keep validation close to serializers/forms and business rules close to services/models where practical.
+- Keep UI copy concise and action-oriented.
+- Add comments only when they explain non-obvious decisions.
+
+## File Ownership Guidance
+
+To reduce merge conflicts, coordinate before changing another contributor's active area:
+
+| Area | Files |
+| --- | --- |
+| Backend auth | `backend/apps/accounts/`, `backend/config/` |
+| Finance API | `backend/apps/transactions/`, `backend/apps/budgets/`, `backend/apps/reports/` |
+| Frontend | `frontend/src/`, `frontend/package.json` |
+| ML and data | `backend/ml/`, `dataset/` |
+| Database docs and seeds | `database/` |
+| Project docs | `README.md`, `CONTRIBUTING.md`, `SECURITY.md` |
+
+## Security
+
+Do not open public issues with secrets, credentials, token dumps, or exploitable vulnerability details. Follow [SECURITY.md](SECURITY.md) for private reporting guidance.
+
+## Community
+
+All contributors are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

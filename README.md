@@ -1,97 +1,105 @@
 # SnapSpend
 
-A full-stack personal finance tracker built with React, Django REST Framework, and PostgreSQL/SQLite. The app supports authentication, transactions, categories, monthly budgets, dashboard analytics, report exports, and **ML-powered anomaly detection** for suspicious transactions.
+SnapSpend is a full-stack personal finance tracker for recording income, managing expenses, monitoring monthly budgets, exporting reports, and spotting unusual spending with ML-assisted anomaly detection. It combines a React/Vite frontend with a Django REST API, JWT authentication, PostgreSQL or SQLite storage, OCR-based bill scanning, and export-ready reporting.
 
 ## Features
 
-### Authentication
-- Register with name, email, and password
-- Login with JWT access and refresh tokens
-- Refresh tokens
-- View and update profile details
-- Change password
-- Logout with refresh token blacklisting
+- JWT authentication with registration, login, refresh tokens, logout, profile updates, password changes, and optional Google/Firebase or Apple OAuth configuration.
+- Transaction and category management for income and expenses, including custom user categories and system default categories.
+- Search, filtering, sorting, date range views, and current-month transaction workflows.
+- Monthly budget tracking with spent, remaining, progress, near-limit, and exceeded states.
+- Dashboard analytics for balance, income, expenses, recent activity, category breakdowns, and trend data.
+- ML-powered anomaly detection using Isolation Forest with a statistical fallback for small transaction histories.
+- OCR bill scanning and bill-photo verification for flagged transactions.
+- CSV, Excel, and PDF exports for reports.
+- Frontend-only demo mode backed by browser storage for quick UI exploration.
 
-### Transactions and Categories
-- Create, edit, delete, and list transactions
-- Support income and expense transaction types
-- Default system categories plus custom user categories
-- Filter by type, category, date range, and month
-- Search by title, note, or category name
-- Sort by newest, oldest, highest, and lowest amount
-- Bill photo scanning with OCR to auto-fill transaction details
+## Screenshots and GIFs
 
-### ML Anomaly Detection
-- Isolation Forest model trained on user's transaction history
-- Automatic flagging of suspicious transactions on creation
-- Statistical z-score fallback when fewer than 10 transactions exist
-- Bill-photo verification flow for flagged transactions using OCR
-- Anomaly detection dashboard panel with scores and reasons
-- "ML Flagged" badges on suspicious transactions in the UI
+Store product screenshots or walkthrough GIFs under `docs/assets/screenshots/`.
 
-### Budgets and Dashboard
-- Create monthly budgets
-- Track spent, remaining, and progress percentage
-- Show healthy, near-limit, and exceeded states
-- Dashboard totals for income, expense, and balance
-- Current-month summary, category breakdown, trend data, and recent transactions
-- ML anomaly alerts panel on the dashboard
+| View | Preview |
+| --- | --- |
+| Sign in | ![SnapSpend sign-in screen](docs/assets/screenshots/screenshot-2026-05-30_20-55-16.png) |
+| Dashboard | ![SnapSpend dashboard screen](docs/assets/screenshots/screenshot-2026-05-30_20-59-20.png) |
 
-### Reports and Export
-- Monthly reports
-- Category summary reports
-- CSV export
-- Excel export with `openpyxl`
-- PDF export with `reportlab`
+Suggested future captures: transaction filters, budget progress, bill scan flow, anomaly verification, and export menu.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  User[User Browser] --> Frontend[React + Vite Frontend]
+  Frontend --> API[Django REST API]
+  API --> Auth[JWT / OAuth Auth]
+  API --> Finance[Transactions, Categories, Budgets]
+  API --> Reports[Reports + Exports]
+  API --> OCR[Tesseract OCR]
+  API --> ML[Anomaly Detector]
+  Finance --> DB[(PostgreSQL or SQLite)]
+  Auth --> DB
+  Reports --> DB
+  ML --> DB
+  ML --> Cache[(Model Cache)]
+```
+
+```mermaid
+flowchart TD
+  Register[Register or Sign In] --> Seed[Seed Default Categories]
+  Seed --> Record[Create Transactions]
+  Record --> Detect{Anomaly Detected?}
+  Detect -- No --> Dashboard[Dashboard + Reports]
+  Detect -- Yes --> Review[Flag Transaction]
+  Review --> Verify[Verify With Bill Photo]
+  Verify --> Dashboard
+  Dashboard --> Export[Export CSV / XLSX / PDF]
+```
 
 ## Tech Stack
 
 | Layer | Technology |
 | --- | --- |
-| Frontend | React 19, Vite, Axios, Recharts |
-| Backend | Django 5.2, Django REST Framework, SimpleJWT |
-| ML | scikit-learn (Isolation Forest), joblib |
-| Database | PostgreSQL (production) / SQLite (development) |
+| Frontend | React 19, Vite, React Router, Axios, Recharts, Tailwind CSS |
+| Backend | Python, Django 5.2, Django REST Framework, SimpleJWT |
+| Database | PostgreSQL for production, SQLite for local development/testing |
+| ML | scikit-learn Isolation Forest, pandas, NumPy, joblib |
 | OCR | Tesseract OCR, Pillow |
-| Export | CSV, openpyxl, reportlab |
+| Reports | CSV, openpyxl, reportlab |
+| Deployment | Gunicorn, WhiteNoise, Render-compatible backend config, Vercel frontend config |
 
 ## Project Structure
 
 ```text
-snapspend/
+expense-tracker/
 ├── backend/
 │   ├── apps/
-│   │   ├── accounts/        # User auth, JWT, profile
+│   │   ├── accounts/        # User auth, JWT, OAuth, profile
 │   │   ├── budgets/         # Monthly budgets
-│   │   ├── reports/         # Dashboard, exports
+│   │   ├── reports/         # Dashboard data and exports
 │   │   └── transactions/    # Transactions, categories, OCR, verification
-│   ├── config/              # Django settings, URLs
-│   ├── ml/                  # ML anomaly detection module
-│   │   ├── anomaly_detector.py
-│   │   └── preprocess_income_expense_dataset.py
-│   ├── manage.py
+│   ├── config/              # Django settings, URLs, ASGI/WSGI
+│   ├── ml/                  # ML preprocessing and anomaly detection
 │   └── requirements.txt
-├── dataset/                 # Sample income/expense dataset
-├── database/                # DB docs, seeds, schema notes
+├── database/                # Schema notes, seeds, deployment, QA docs
+├── dataset/                 # Income/expense dataset and processed splits
 ├── frontend/
-│   ├── public/
-│   └── src/
-│       ├── components/      # Shared UI components
-│       ├── context/         # Auth and theme context
-│       ├── pages/           # Dashboard, Transactions, Budgets, etc.
-│       ├── services/        # API service layer
-│       ├── styles/          # Theme and global styles
-│       └── utils/           # Helpers and utilities
+│   ├── public/              # Branding and static assets
+│   └── src/                 # Pages, components, context, services, utils
 ├── CONTRIBUTING.md
-├── plan.md
+├── CODE_OF_CONDUCT.md
+├── LICENSE
+├── SECURITY.md
 └── README.md
 ```
 
-## Prerequisites
+## Setup
 
-- **Python 3.11+**
-- **Node.js 18+** and npm
-- **Tesseract OCR** (required for bill scanning and anomaly verification)
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+ and npm
+- PostgreSQL for production-style local development, or SQLite for the quickest setup
+- Tesseract OCR for bill scanning and verification
 
 Install Tesseract on Ubuntu/Debian:
 
@@ -99,40 +107,34 @@ Install Tesseract on Ubuntu/Debian:
 sudo apt install tesseract-ocr
 ```
 
-## How to Run
-
-### 1. Clone the Repository
+### 1. Clone
 
 ```bash
 git clone <repository-url>
-cd snapspend
+cd expense-tracker
 ```
 
-### 2. Backend Setup
+### 2. Backend
 
 ```bash
 cd backend
-
-# Create and activate virtual environment
 python -m venv .venv
-source .venv/bin/activate        # Linux/macOS
-# .venv\Scripts\activate         # Windows
-
-# Install dependencies
+source .venv/bin/activate
 pip install -r requirements.txt
-
-# Set up environment variables
 cp .env.example .env
 ```
 
-Edit the `.env` file to configure your environment. For **local development with SQLite** (no PostgreSQL needed), add:
+For the fastest local setup, keep SQLite enabled in `backend/.env`:
 
 ```env
 DATABASE_ENGINE=sqlite
 SQLITE_NAME=db.sqlite3
+DEBUG=True
+FRONTEND_URL=http://localhost:5173
+FRONTEND_URLS=http://localhost:5173
 ```
 
-For **PostgreSQL**, keep the default settings and update the credentials:
+For PostgreSQL, set:
 
 ```env
 DATABASE_ENGINE=postgres
@@ -143,155 +145,86 @@ POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 ```
 
-For **cloud PostgreSQL** on platforms like Render, Neon, Supabase, or Railway, you can use a single connection string instead:
-
-```env
-DATABASE_URL=postgresql://user:password@host:5432/database?sslmode=require
-DEBUG=False
-ALLOWED_HOSTS=your-backend-domain.onrender.com
-FRONTEND_URLS=https://your-frontend-domain.vercel.app
-```
-
-Then run migrations and start the server:
+Then initialize and run the API:
 
 ```bash
-# Run database migrations
 python manage.py migrate
-
-# Seed default categories (optional but recommended)
 python manage.py seed_categories
-
-# Start the backend server
 python manage.py runserver
 ```
 
-The backend runs at **http://localhost:8000**.
+Backend URL: `http://localhost:8000`
 
-### 3. Frontend Setup
+### 3. Frontend
 
-Open a new terminal:
+In a second terminal:
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start the dev server
+cp .env.example .env
 npm run dev
 ```
 
-The frontend runs at **http://localhost:5173**.
+Frontend URL: `http://localhost:5173`
 
-### 4. Frontend-Only Mode (No Backend)
+The frontend API base is configured with:
 
-If you want to run the frontend without a backend (uses local storage for demo data), create a `.env` file in the `frontend/` directory:
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+### 4. Frontend-Only Demo Mode
+
+To explore the UI without a running backend, set this in `frontend/.env`:
 
 ```env
 VITE_FRONTEND_ONLY=true
 ```
 
-> **Note:** ML anomaly detection, bill scanning, and OCR verification require the backend to be running.
+ML anomaly detection, OCR, bill verification, authenticated API flows, and server exports require the Django backend.
 
-### Environment Variables Reference
+## Environment Variables
 
-#### Backend (`backend/.env`)
+### Backend (`backend/.env`)
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `SECRET_KEY` | `change-me` | Django secret key (change in production) |
-| `DEBUG` | `True` | Django debug mode |
-| `ALLOWED_HOSTS` | `127.0.0.1,localhost` | Comma-separated allowed hosts |
-| `DATABASE_URL` | empty | Full database connection string. Takes priority over the split PostgreSQL variables below. |
-| `DATABASE_ENGINE` | `postgres` | `postgres` or `sqlite` |
-| `SQLITE_NAME` | `db.sqlite3` | SQLite file name (when using sqlite engine) |
-| `POSTGRES_DB` | `expense_tracker` | PostgreSQL database name |
-| `POSTGRES_USER` | `postgres` | PostgreSQL user |
-| `POSTGRES_PASSWORD` | `postgres` | PostgreSQL password |
-| `POSTGRES_HOST` | `localhost` | PostgreSQL host |
-| `POSTGRES_PORT` | `5432` | PostgreSQL port |
-| `POSTGRES_SSL_REQUIRE` | `False` in debug, `True` in production | Force SSL for PostgreSQL connections |
-| `FRONTEND_URL` | `http://localhost:5173` | Frontend URL for CORS |
-| `FRONTEND_URLS` | same as above | Comma-separated frontend URLs for CORS |
-| `GOOGLE_OAUTH_CLIENT_ID` | empty | Google OAuth client ID for Sign in with Google |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | empty | Google OAuth client secret |
-| `GOOGLE_OAUTH_REDIRECT_URI` | empty | Backend callback URI registered with Google, for example `http://localhost:8000/api/auth/oauth/google/callback/` |
-| `FIREBASE_PROJECT_ID` | empty | Firebase project ID used to verify Google sign-in ID tokens |
-| `FIREBASE_PROJECT_NUMBER` | empty | Optional Firebase project number accepted as a token audience |
-| `APPLE_OAUTH_CLIENT_ID` | empty | Apple Services ID / client ID |
-| `APPLE_OAUTH_TEAM_ID` | empty | Apple Developer team ID |
-| `APPLE_OAUTH_KEY_ID` | empty | Apple Sign in key ID |
-| `APPLE_OAUTH_PRIVATE_KEY` | empty | Apple private key PEM, with newlines escaped as `\\n` in `.env` |
-| `APPLE_OAUTH_REDIRECT_URI` | empty | Backend callback URI registered with Apple |
-| `OAUTH_FRONTEND_CALLBACK_PATH` | `/auth/callback` | Frontend route that completes provider sign-in |
-| `DJANGO_LOG_LEVEL` | `INFO` | Root/Django console log level |
+| Variable | Purpose |
+| --- | --- |
+| `SECRET_KEY` | Django secret key. Change before production. |
+| `DEBUG` | Enables local debug behavior when `True`. |
+| `ALLOWED_HOSTS` | Comma-separated allowed hosts. |
+| `DATABASE_URL` | Full database connection string. Overrides split database variables. |
+| `DATABASE_ENGINE` | `sqlite` or `postgres`. |
+| `SQLITE_NAME` | SQLite database filename. |
+| `POSTGRES_*` | PostgreSQL database connection settings. |
+| `FRONTEND_URL`, `FRONTEND_URLS` | Frontend origins for CORS/CSRF. |
+| `GOOGLE_OAUTH_*`, `FIREBASE_*`, `APPLE_OAUTH_*` | Optional social sign-in configuration. |
+| `ML_ANOMALY_*` | Optional anomaly detector tuning and cache settings. |
+| `SECURE_*`, `SESSION_COOKIE_*`, `CSRF_COOKIE_*` | Production security controls. |
 
-> Note: Apple requires an HTTPS redirect URI on a real domain for web Sign in with Apple. `localhost` and raw IP callback URLs are not accepted by Apple.
+### Frontend (`frontend/.env`)
 
-#### Frontend (`frontend/.env`)
+| Variable | Purpose |
+| --- | --- |
+| `VITE_API_BASE_URL` | Backend host, normalized by the app to include `/api`. |
+| `VITE_FRONTEND_ONLY` | Enables local browser-storage demo mode. |
+| `VITE_FIREBASE_*` | Optional Firebase web app configuration. |
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `VITE_API_URL` | `http://localhost:8000/api` | Backend API base URL |
-| `VITE_FRONTEND_ONLY` | `false` | Set to `true` for offline demo mode |
-| `VITE_FIREBASE_API_KEY` | empty | Firebase web app API key |
-| `VITE_FIREBASE_AUTH_DOMAIN` | empty | Firebase auth domain, for example `your-project.firebaseapp.com` |
-| `VITE_FIREBASE_PROJECT_ID` | empty | Firebase project ID |
-| `VITE_FIREBASE_STORAGE_BUCKET` | empty | Firebase storage bucket |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | empty | Firebase messaging sender ID |
-| `VITE_FIREBASE_APP_ID` | empty | Firebase web app ID |
+## API Overview
 
-## Deployment
-
-Use [database/deployment.md](/c:/Projects/SnapSpend/snapspend/database/deployment.md) for the full production walkthrough. The backend now supports both a `Procfile`-based Gunicorn startup command and a single `DATABASE_URL`, which makes deployment on common PaaS providers much smoother.
-
-## Main API Endpoints
-
-### Authentication
-- `POST /api/auth/register/`
-- `POST /api/auth/login/`
-- `POST /api/auth/firebase/google/`
-- `POST /api/auth/refresh/`
-- `GET /api/auth/me/`
-- `PUT /api/auth/me/`
-- `PUT /api/auth/change-password/`
-- `POST /api/auth/logout/`
-
-### Categories and Transactions
-- `GET /api/categories/`
-- `POST /api/categories/`
-- `PUT /api/categories/{id}/`
-- `DELETE /api/categories/{id}/`
-- `GET /api/transactions/`
-- `POST /api/transactions/` — creates transaction; returns `202` if ML flags it as anomalous
-- `GET /api/transactions/{id}/`
-- `PUT /api/transactions/{id}/`
-- `DELETE /api/transactions/{id}/`
-
-### ML Anomaly Detection
-- `GET /api/transactions/anomalies/` — list ML-detected suspicious transactions
-- `POST /api/transactions/verify/` — verify a flagged transaction with a bill photo
-- `POST /api/transactions/scan-bill/` — scan a bill photo to auto-fill transaction fields
-
-### Budgets
-- `GET /api/budgets/`
-- `POST /api/budgets/`
-- `PUT /api/budgets/{id}/`
-
-### Reports and Export
-- `GET /api/reports/dashboard/`
-- `GET /api/reports/monthly/`
-- `GET /api/reports/category-summary/`
-- `GET /api/reports/export/csv/`
-- `GET /api/reports/export/xlsx/`
-- `GET /api/reports/export/pdf/`
-
-### Utility
-- `GET /health/`
+| Area | Endpoints |
+| --- | --- |
+| Health | `GET /health/` |
+| Auth | `POST /api/auth/register/`, `POST /api/auth/login/`, `POST /api/auth/refresh/`, `GET /api/auth/me/`, `PUT /api/auth/me/`, `POST /api/auth/logout/` |
+| Transactions | `GET/POST /api/transactions/`, `GET/PUT/DELETE /api/transactions/{id}/` |
+| Categories | `GET/POST /api/categories/`, `PUT/DELETE /api/categories/{id}/` |
+| Budgets | `GET/POST /api/budgets/`, `PUT /api/budgets/{id}/` |
+| ML and OCR | `GET /api/transactions/anomalies/`, `POST /api/transactions/verify/`, `POST /api/transactions/scan-bill/` |
+| Reports | `GET /api/reports/dashboard/`, `GET /api/reports/monthly/`, `GET /api/reports/category-summary/`, `GET /api/reports/export/csv/`, `GET /api/reports/export/xlsx/`, `GET /api/reports/export/pdf/` |
 
 ## Testing
 
-### Backend
+Backend:
 
 ```bash
 cd backend
@@ -299,17 +232,35 @@ source .venv/bin/activate
 python manage.py test
 ```
 
-### Frontend
+Frontend:
 
 ```bash
 cd frontend
 npm run build
 ```
 
-## Documentation
+## Deployment
 
-- Database setup: [database/setup.md](database/setup.md)
-- QA checklist: [database/qa_checklist.md](database/qa_checklist.md)
-- Deployment notes: [database/deployment.md](database/deployment.md)
-- ML module docs: [backend/ml/README.md](backend/ml/README.md)
-- Team plan: [plan.md](plan.md)
+- Backend: see [database/deployment.md](database/deployment.md) for Render/PaaS-oriented deployment notes.
+- Frontend: deploy `frontend/` to Vercel or another static host and set `VITE_API_BASE_URL` to the backend host.
+- Database: use PostgreSQL in production, preferably through `DATABASE_URL` with SSL enabled.
+- Security: set a strong `SECRET_KEY`, disable debug mode, configure trusted frontend origins, and review [SECURITY.md](SECURITY.md).
+
+## Future Roadmap
+
+- Add real-time budget notifications and recurring transaction reminders.
+- Add richer forecasting for monthly spend and cash flow.
+- Improve anomaly explainability with clearer user-facing reasons and confidence bands.
+- Add multi-currency support and exchange-rate normalization.
+- Add receipt storage integrations for S3-compatible object storage.
+- Add shared household budgets and role-based collaboration.
+- Add automated E2E tests for core finance workflows.
+- Publish polished screenshots and walkthrough GIFs in `docs/assets/screenshots/`.
+
+## Contributing
+
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), follow the [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and report vulnerabilities through [SECURITY.md](SECURITY.md).
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
